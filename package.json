@@ -1,0 +1,27 @@
+{
+  "name": "call-recording-transcriber",
+  "version": "1.0.0",
+  "description": "A Node.js CLI app to transcribe audio/video files in a folder using Google Gemini",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node index.ts"
+  },
+  "dependencies": {
+    "openai": "^4.52.7",
+    "commander": "^12.1.0",
+    "dotenv": "^16.4.5",
+    "ffmpeg-static": "^5.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.0.0"
+  },
+  "bin": {
+    "transcribe": "./dist/index.js"
+  },
+  "author": "",
+  "license": "ISC"
+}
