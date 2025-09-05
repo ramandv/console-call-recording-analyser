@@ -15,17 +15,21 @@ config();
 interface TranscribeOptions {
   model?: string;
   apiKey?: string;
+  transcribeOnly?: boolean;
+  summaryOnly?: boolean;
 }
 
 const program = new Command();
 
 program
   .name('transcribe')
-  .description('Transcribe audio/video files in a folder using OpenAI Whisper')
+  .description('Transcribe audio/video files and generate summaries using OpenAI Whisper')
   .version('1.0.0')
   .argument('[folder]', 'Folder path to process', './input')
   .option('-m, --model <model>', 'Whisper model to use', 'whisper-1')
   .option('-k, --api-key <key>', 'OpenAI API key')
+  .option('-t, --transcribe-only', 'Only perform transcription, skip CSV generation')
+  .option('-s, --summary-only', 'Only generate CSV summary from existing transcripts')
   .action(async (folder: string, options: TranscribeOptions) => {
     try {
       await main(folder, options);
@@ -36,18 +40,31 @@ program
   });
 
 async function main(folder: string, options: TranscribeOptions): Promise<void> {
-  console.log('🚀 Starting transcription process...');
+  const { transcribeOnly, summaryOnly, model = 'whisper-1', apiKey } = options;
+
+  // Determine operation mode
+  const mode = transcribeOnly ? 'transcribe' : summaryOnly ? 'summary' : 'both';
+
+  console.log(`🚀 Starting ${mode} process...`);
   console.log(`📁 Target folder: ${folder}`);
-  console.log(`🤖 Model: ${options.model || 'whisper-1'}`);
 
-  const { model = 'whisper-1', apiKey } = options;
+  if (mode === 'transcribe' || mode === 'both') {
+    console.log(`🤖 Model: ${model}`);
 
-  // Get OpenAI API key
-  const openaiApiKey = apiKey || process.env.OPENAI_API_KEY;
-  if (!openaiApiKey) {
-    throw new Error('OpenAI API key not provided. Use --api-key option or set OPENAI_API_KEY environment variable');
+    // Get OpenAI API key
+    const openaiApiKey = apiKey || process.env.OPENAI_API_KEY;
+    if (!openaiApiKey) {
+      throw new Error('OpenAI API key not provided. Use --api-key option or set OPENAI_API_KEY environment variable');
+    }
+    console.log('✅ OpenAI API key configured');
+
+    // Initialize OpenAI
+    console.log('🔧 Initializing OpenAI client...');
+    const openai = new OpenAI({
+      apiKey: openaiApiKey,
+    });
+    console.log('✅ OpenAI client initialized successfully');
   }
-  console.log('✅ OpenAI API key configured');
 
   // Check if folder exists
   console.log('🔍 Checking if folder exists...');
@@ -58,21 +75,161 @@ async function main(folder: string, options: TranscribeOptions): Promise<void> {
     throw new Error(`Folder does not exist: ${folder}`);
   }
 
+  // Supported audio/video extensions
+  const supportedExtensions = ['.mp3', '.wav', '.mp4', '.m4a', '.flac', '.ogg', '.amr'];
+
+  // Execute based on mode
+  if (mode === 'transcribe' || mode === 'both') {
+    console.log(`🎵 Supported file extensions: ${supportedExtensions.join(', ')}`);
+    console.log('🔄 Starting transcription process...');
+    await processTranscription(folder, options, supportedExtensions);
+    console.log('✅ Transcription completed');
+  }
+
+  if (mode === 'summary' || mode === 'both') {
+    console.log('🔄 Starting summary generation...');
+    await processSummary(folder, supportedExtensions);
+    console.log('✅ Summary generation completed');
+  }
+
+  console.log(`✅ ${mode.charAt(0).toUpperCase() + mode.slice(1)} process completed successfully`);
+}
+
+async function processTranscription(folder: string, options: TranscribeOptions, extensions: string[]): Promise<void> {
+  const { model = 'whisper-1', apiKey } = options;
+
+  // Get OpenAI API key
+  const openaiApiKey = apiKey || process.env.OPENAI_API_KEY;
+  if (!openaiApiKey) {
+    throw new Error('OpenAI API key not provided');
+  }
+
   // Initialize OpenAI
-  console.log('🔧 Initializing OpenAI client...');
   const openai = new OpenAI({
     apiKey: openaiApiKey,
   });
-  console.log('✅ OpenAI client initialized successfully');
 
-  // Supported audio/video extensions (Whisper API compatible + .amr with conversion)
-  const supportedExtensions = ['.mp3', '.wav', '.mp4', '.m4a', '.flac', '.ogg', '.amr'];
-  console.log(`🎵 Supported file extensions: ${supportedExtensions.join(', ')}`);
+  await processFolderForTranscription(folder, openai, model, extensions);
+}
 
-  // Recursively process files
-  console.log('🔄 Starting recursive file processing...');
-  await processFolder(folder, openai, model, supportedExtensions);
-  console.log('✅ File processing completed');
+async function processSummary(folder: string, extensions: string[]): Promise<void> {
+  await processFolderForSummary(folder, extensions);
+}
+
+async function processFolderForTranscription(folder: string, openai: OpenAI, model: string, extensions: string[]): Promise<void> {
+  console.log(`\n${'='.repeat(80)}`);
+  console.log(`📂 TRANSCRIPTION - SCANNING DIRECTORY: ${folder}`);
+  console.log(`${'='.repeat(80)}`);
+
+  const items = await fs.readdir(folder, { withFileTypes: true });
+  console.log(`📋 Found ${items.length} items in ${folder}\n`);
+
+  let processedCount = 0;
+  let skippedCount = 0;
+  let dirCount = 0;
+
+  for (const item of items) {
+    const fullPath = path.join(folder, item.name);
+
+    if (item.isDirectory()) {
+      console.log(`📁 Entering subdirectory: ${fullPath}`);
+      dirCount++;
+      await processFolderForTranscription(fullPath, openai, model, extensions);
+    } else if (item.isFile()) {
+      const ext = path.extname(item.name).toLowerCase();
+      if (extensions.includes(ext)) {
+        console.log(`\n${'-'.repeat(60)}`);
+        console.log(`🎵 TRANSCRIBING FILE: ${item.name}`);
+        console.log(`${'-'.repeat(60)}`);
+
+        const txtPath = path.join(folder, path.basename(item.name, ext) + '.txt');
+        try {
+          await fs.access(txtPath);
+          console.log(`⏭️  SKIPPING: Transcription already exists`);
+          skippedCount++;
+        } catch {
+          console.log(`🎙️  STARTING TRANSCRIPTION...`);
+          await transcribeFile(fullPath, txtPath, openai, model);
+          processedCount++;
+        }
+      } else {
+        console.log(`❌ SKIPPING: ${item.name} (unsupported format: ${ext})`);
+      }
+    }
+  }
+
+  console.log(`\n${'='.repeat(80)}`);
+  console.log(`📊 TRANSCRIPTION SUMMARY: ${folder}`);
+  console.log(`   • Processed: ${processedCount} files`);
+  console.log(`   • Skipped: ${skippedCount} files`);
+  console.log(`   • Subdirectories: ${dirCount}`);
+  console.log(`${'='.repeat(80)}\n`);
+}
+
+async function processFolderForSummary(folder: string, extensions: string[]): Promise<void> {
+  console.log(`\n${'='.repeat(80)}`);
+  console.log(`📂 SUMMARY - SCANNING DIRECTORY: ${folder}`);
+  console.log(`${'='.repeat(80)}`);
+
+  const items = await fs.readdir(folder, { withFileTypes: true });
+  console.log(`📋 Found ${items.length} items in ${folder}\n`);
+
+  let processedCount = 0;
+  let dirCount = 0;
+  const csvData: any[] = [];
+
+  for (const item of items) {
+    const fullPath = path.join(folder, item.name);
+
+    if (item.isDirectory()) {
+      console.log(`📁 Entering subdirectory: ${fullPath}`);
+      dirCount++;
+      await processFolderForSummary(fullPath, extensions);
+    } else if (item.isFile()) {
+      const ext = path.extname(item.name).toLowerCase();
+      if (extensions.includes(ext)) {
+        console.log(`\n${'-'.repeat(60)}`);
+        console.log(`📊 PROCESSING FILE: ${item.name}`);
+        console.log(`${'-'.repeat(60)}`);
+
+        // Check if transcription exists
+        const txtPath = path.join(folder, path.basename(item.name, ext) + '.txt');
+        let hasTranscription = false;
+        try {
+          await fs.access(txtPath);
+          hasTranscription = true;
+          console.log(`✅ Found transcription file: ${txtPath}`);
+        } catch {
+          console.log(`ℹ️  No transcription found for: ${item.name}`);
+        }
+
+        // Add to CSV regardless of transcription status
+        const metadata = parseFilenameMetadata(item.name);
+        const duration = await getAudioDuration(fullPath);
+        csvData.push({
+          filename: item.name,
+          duration: duration || 'N/A',
+          hasTranscription: hasTranscription,
+          ...metadata
+        });
+        processedCount++;
+      } else {
+        console.log(`❌ SKIPPING: ${item.name} (unsupported format: ${ext})`);
+      }
+    }
+  }
+
+  // Generate CSV file
+  if (csvData.length > 0) {
+    await generateCsvFile(folder, csvData);
+  }
+
+  console.log(`\n${'='.repeat(80)}`);
+  console.log(`📊 SUMMARY GENERATION: ${folder}`);
+  console.log(`   • Processed: ${processedCount} files`);
+  console.log(`   • Subdirectories: ${dirCount}`);
+  console.log(`   • CSV generated: summary.csv`);
+  console.log(`${'='.repeat(80)}\n`);
 }
 
 async function processFolder(folder: string, openai: OpenAI, model: string, extensions: string[]): Promise<void> {
@@ -291,7 +448,7 @@ function parseFilenameMetadata(filename: string): { timestamp: string; phoneNumb
   try {
     // Extract TP tokens from filename
     const tp1Match = filename.match(/TP1(\d+)/);
-    const tp3Match = filename.match(/TP3(\d+)/);
+    const tp3Match = filename.match(/TP3([+\d]+)/);
     const tp4Match = filename.match(/TP4(\w+)/);
 
     // Parse timestamp (TP1) - assuming it's a Unix timestamp in milliseconds
@@ -304,9 +461,11 @@ function parseFilenameMetadata(filename: string): { timestamp: string; phoneNumb
       }
     }
 
-    // Parse phone number (TP3)
+    // Parse phone number (TP3) - handle numbers with + prefix
     if (tp3Match) {
-      phoneNumber = tp3Match[1];
+      const phoneStr = tp3Match[1];
+      // Remove + prefix if present and extract the actual number
+      phoneNumber = phoneStr.startsWith('+') ? phoneStr.substring(1) : phoneStr;
     }
 
     // Parse call type (TP4) - extract only the word after TP4 until next TP
@@ -331,7 +490,7 @@ async function generateCsvFile(folder: string, csvData: any[]): Promise<void> {
 
   try {
     // CSV header
-    const headers = ['Filename', 'Duration', 'Timestamp', 'Phone Number', 'Call Type'];
+    const headers = ['Filename', 'Duration', 'Has Transcription', 'Timestamp', 'Phone Number', 'Call Type'];
     let csvContent = headers.join(',') + '\n';
 
     // Add data rows
@@ -339,6 +498,7 @@ async function generateCsvFile(folder: string, csvData: any[]): Promise<void> {
       const values = [
         `"${row.filename}"`,
         `"${row.duration}"`,
+        `"${row.hasTranscription ? 'Yes' : 'No'}"`,
         `"${row.timestamp}"`,
         `"${row.phoneNumber}"`,
         `"${row.callType}"`

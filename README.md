@@ -25,6 +25,7 @@ npm run build
 
 ## Usage
 
+### Full Process (Transcription + CSV Generation)
 ```bash
 # Basic usage with default folder (./input)
 npm start
@@ -44,6 +45,26 @@ npm start
 
 # Combine options
 npm start /custom/folder -- --api-key your-openai-api-key
+```
+
+### Separate Operations
+
+#### Transcription Only
+```bash
+# Transcribe files without generating CSV
+npm start -- --transcribe-only
+
+# With custom folder
+npm start /path/to/folder -- --transcribe-only
+```
+
+#### Summary Generation Only
+```bash
+# Generate CSV from existing transcriptions
+npm start -- --summary-only
+
+# With custom folder
+npm start /path/to/folder -- --summary-only
 ```
 
 ## CSV Output
