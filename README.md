@@ -12,6 +12,9 @@ A Node.js command-line application that recursively transcribes audio/video file
 - **OpenAI API authentication**: Supports API key via `--api-key` option or `OPENAI_API_KEY` environment variable
 - **TypeScript**: Fully typed with TypeScript for better development experience
 - **Comprehensive debug logging**: Detailed progress information and error reporting
+- **CSV Summary Generation**: Creates `summary.csv` with filename, duration, timestamp, phone number, and call type
+- **Filename Metadata Parsing**: Extracts TP1 (timestamp), TP3 (phone), TP4 (call type) from filenames
+- **Enhanced Console Output**: Clear separators and file-specific progress indicators
 
 ## Installation
 
@@ -41,6 +44,22 @@ npm start
 
 # Combine options
 npm start /custom/folder -- --api-key your-openai-api-key
+```
+
+## CSV Output
+
+The application generates a `summary.csv` file in each processed directory containing:
+
+- **Filename**: Original audio file name
+- **Duration**: Audio duration in HH:MM:SS format
+- **Timestamp**: Parsed from TP1 token in filename (YYYY-MM-DD HH:MM:SS)
+- **Phone Number**: Parsed from TP3 token in filename
+- **Call Type**: Parsed from TP4 token in filename (e.g., "outgoing", "incoming")
+
+Example CSV output:
+```csv
+Filename,Duration,Timestamp,Phone Number,Call Type
+"recording-TP11755659148284TP2TP37561074523TP4outgoing.amr","00:00:20","2025-08-20 03:05:48","7561074523","outgoing"
 ```
 
 ## Development

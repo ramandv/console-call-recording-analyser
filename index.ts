@@ -76,13 +76,17 @@ async function main(folder: string, options: TranscribeOptions): Promise<void> {
 }
 
 async function processFolder(folder: string, openai: OpenAI, model: string, extensions: string[]): Promise<void> {
-  console.log(`📂 Scanning directory: ${folder}`);
+  console.log(`\n${'='.repeat(80)}`);
+  console.log(`📂 SCANNING DIRECTORY: ${folder}`);
+  console.log(`${'='.repeat(80)}`);
+
   const items = await fs.readdir(folder, { withFileTypes: true });
-  console.log(`📋 Found ${items.length} items in ${folder}`);
+  console.log(`📋 Found ${items.length} items in ${folder}\n`);
 
   let processedCount = 0;
   let skippedCount = 0;
   let dirCount = 0;
+  const csvData: any[] = [];
 
   for (const item of items) {
     const fullPath = path.join(folder, item.name);
@@ -94,27 +98,58 @@ async function processFolder(folder: string, openai: OpenAI, model: string, exte
     } else if (item.isFile()) {
       const ext = path.extname(item.name).toLowerCase();
       if (extensions.includes(ext)) {
-        console.log(`🎵 Found supported file: ${fullPath}`);
+        console.log(`\n${'-'.repeat(60)}`);
+        console.log(`🎵 FILE: ${item.name}`);
+        console.log(`${'-'.repeat(60)}`);
+
         const txtPath = path.join(folder, path.basename(item.name, ext) + '.txt');
         try {
           await fs.access(txtPath);
-          console.log(`⏭️  Skipping ${fullPath} - transcription already exists at ${txtPath}`);
+          console.log(`⏭️  SKIPPING: Transcription already exists`);
           skippedCount++;
+
+          // Still add to CSV even if skipped
+          const metadata = parseFilenameMetadata(item.name);
+          const duration = await getAudioDuration(fullPath);
+          csvData.push({
+            filename: item.name,
+            duration: duration || 'N/A',
+            ...metadata
+          });
         } catch {
-          console.log(`🎙️  Starting transcription for: ${fullPath}`);
-          await transcribeFile(fullPath, txtPath, openai, model);
+          console.log(`🎙️  STARTING TRANSCRIPTION...`);
+          const result = await transcribeFile(fullPath, txtPath, openai, model);
           processedCount++;
+
+          // Add to CSV
+          const metadata = parseFilenameMetadata(item.name);
+          csvData.push({
+            filename: item.name,
+            duration: result.duration || 'N/A',
+            ...metadata
+          });
         }
       } else {
-        console.log(`❌ Skipping unsupported file: ${fullPath} (extension: ${ext})`);
+        console.log(`❌ SKIPPING: ${item.name} (unsupported format: ${ext})`);
       }
     }
   }
 
-  console.log(`📊 Directory ${folder} summary: ${processedCount} processed, ${skippedCount} skipped, ${dirCount} subdirectories`);
+  // Generate CSV file
+  if (csvData.length > 0) {
+    await generateCsvFile(folder, csvData);
+  }
+
+  console.log(`\n${'='.repeat(80)}`);
+  console.log(`📊 DIRECTORY SUMMARY: ${folder}`);
+  console.log(`   • Processed: ${processedCount} files`);
+  console.log(`   • Skipped: ${skippedCount} files`);
+  console.log(`   • Subdirectories: ${dirCount}`);
+  console.log(`   • CSV generated: summary.csv`);
+  console.log(`${'='.repeat(80)}\n`);
 }
 
-async function transcribeFile(filePath: string, txtPath: string, openai: OpenAI, model: string): Promise<void> {
+async function transcribeFile(filePath: string, txtPath: string, openai: OpenAI, model: string): Promise<{ duration: string }> {
   let tempWavPath: string | null = null;
 
   try {
@@ -161,8 +196,13 @@ async function transcribeFile(filePath: string, txtPath: string, openai: OpenAI,
     // Save to text file
     await fs.writeFile(txtPath, transcriptionText, 'utf8');
     console.log(`✅ Successfully saved transcription to ${txtPath}`);
+
+    // Get duration for return value
+    const duration = await getAudioDuration(filePath);
+    return { duration: duration || 'N/A' };
   } catch (error: unknown) {
     console.error(`❌ Failed to transcribe ${filePath}:`, error instanceof Error ? error.message : String(error));
+    return { duration: 'N/A' };
   } finally {
     // Clean up temporary WAV file
     if (tempWavPath) {
@@ -218,6 +258,100 @@ function getMimeType(ext: string): string {
     '.amr': 'audio/amr'
   };
   return mimeTypes[ext] || 'application/octet-stream';
+}
+
+async function getAudioDuration(filePath: string): Promise<string | null> {
+  const execAsync = promisify(exec);
+
+  try {
+    // Use FFmpeg to get duration
+    const ffmpegCommand = `"${ffmpeg}" -i "${filePath}" 2>&1 | grep "Duration" | cut -d ' ' -f 4 | sed s/,//`;
+
+    const { stdout } = await execAsync(ffmpegCommand);
+    const duration = stdout.trim();
+
+    if (duration) {
+      // Convert HH:MM:SS.ms format to just HH:MM:SS
+      return duration.split('.')[0];
+    }
+
+    return null;
+  } catch (error) {
+    console.warn(`⚠️  Could not get duration for ${filePath}`);
+    return null;
+  }
+}
+
+function parseFilenameMetadata(filename: string): { timestamp: string; phoneNumber: string; callType: string } {
+  // Default values
+  let timestamp = 'N/A';
+  let phoneNumber = 'N/A';
+  let callType = 'N/A';
+
+  try {
+    // Extract TP tokens from filename
+    const tp1Match = filename.match(/TP1(\d+)/);
+    const tp3Match = filename.match(/TP3(\d+)/);
+    const tp4Match = filename.match(/TP4(\w+)/);
+
+    // Parse timestamp (TP1) - assuming it's a Unix timestamp in milliseconds
+    if (tp1Match) {
+      const ts = parseInt(tp1Match[1]);
+      if (!isNaN(ts)) {
+        // Convert Unix timestamp to readable format
+        const date = new Date(ts);
+        timestamp = date.toISOString().slice(0, 19).replace('T', ' ');
+      }
+    }
+
+    // Parse phone number (TP3)
+    if (tp3Match) {
+      phoneNumber = tp3Match[1];
+    }
+
+    // Parse call type (TP4) - extract only the word after TP4 until next TP
+    if (tp4Match) {
+      const afterTP4 = filename.substring(filename.indexOf('TP4') + 3);
+      const nextTPMatch = afterTP4.match(/TP\d/);
+      if (nextTPMatch) {
+        callType = afterTP4.substring(0, nextTPMatch.index);
+      } else {
+        callType = afterTP4;
+      }
+    }
+  } catch (error) {
+    console.warn(`⚠️  Could not parse metadata from filename: ${filename}`);
+  }
+
+  return { timestamp, phoneNumber, callType };
+}
+
+async function generateCsvFile(folder: string, csvData: any[]): Promise<void> {
+  const csvPath = path.join(folder, 'summary.csv');
+
+  try {
+    // CSV header
+    const headers = ['Filename', 'Duration', 'Timestamp', 'Phone Number', 'Call Type'];
+    let csvContent = headers.join(',') + '\n';
+
+    // Add data rows
+    for (const row of csvData) {
+      const values = [
+        `"${row.filename}"`,
+        `"${row.duration}"`,
+        `"${row.timestamp}"`,
+        `"${row.phoneNumber}"`,
+        `"${row.callType}"`
+      ];
+      csvContent += values.join(',') + '\n';
+    }
+
+    // Write CSV file
+    await fs.writeFile(csvPath, csvContent, 'utf8');
+    console.log(`📊 CSV file generated: ${csvPath}`);
+  } catch (error) {
+    console.error(`❌ Failed to generate CSV file: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 program.parse();
