@@ -1,4 +1,6 @@
 input
+service_account.json
+del
 
 # Dependencies
 node_modules/

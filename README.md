@@ -47,6 +47,18 @@ npm start
 npm start /custom/folder -- --api-key your-openai-api-key
 ```
 
+### Choose Transcription Service
+```bash
+# Use OpenAI Whisper (default)
+npm start -- --service whisper
+
+# Use Google Speech-to-Text v2
+npm start -- --service google
+
+# Combine with other options
+npm start /path/to/folder -- --service google --transcribe-only
+```
+
 ### Separate Operations
 
 #### Transcription Only
@@ -95,9 +107,55 @@ npm run build
 
 ## Setup Requirements
 
+### For OpenAI Whisper (Default)
 1. **OpenAI API Key**: Get your API key from [OpenAI Platform](https://platform.openai.com/api-keys)
 2. **Configure Environment**: Copy `.env.example` to `.env` and add your API key
 3. **Supported Audio Formats**: The app supports mp3, wav, mp4, m4a, flac, ogg, and amr files (.amr files are automatically converted to WAV using FFmpeg)
+
+### For Google Speech-to-Text
+1. **Google Cloud Project**: Create a project in [Google Cloud Console](https://console.cloud.google.com/)
+2. **Enable APIs**: Enable both Speech-to-Text API and Cloud Storage API for your project
+3. **Service Account Key**: Create a service account and download the JSON key file
+4. **Set Environment Variables**:
+   ```bash
+   export GOOGLE_APPLICATION_CREDENTIALS=/path/to/your/service-account-key.json
+   export GOOGLE_CLOUD_STORAGE_BUCKET=your-transcription-bucket-name
+   ```
+5. **Create Cloud Storage Bucket**: Create a bucket for storing audio files longer than 1 minute
+6. **Supported Audio Formats**: Same as OpenAI (mp3, wav, mp4, m4a, flac, ogg, amr)
+
+### For Speechmatics
+1. **Speechmatics Account**: Sign up at [Speechmatics](https://speechmatics.com/)
+2. **API Key**: Get your API key from the Speechmatics dashboard
+3. **Set Environment Variable**:
+   ```bash
+   export SPEECHMATICS_API_KEY=your-speechmatics-api-key
+   ```
+4. **Supported Audio Formats**: MP3, WAV, FLAC, OGG, AMR, M4A (AMR files processed directly without conversion!)
+
+#### Google Cloud Storage Setup for Long Audio Files
+For audio files longer than 1 minute, Google requires the audio to be stored in Google Cloud Storage:
+
+1. **Create a Bucket**:
+   ```bash
+   gsutil mb gs://your-transcription-bucket-name
+   ```
+
+2. **Set Bucket Permissions** (grant your service account access):
+   ```bash
+   gsutil iam ch serviceAccount:your-service-account@your-project.iam.gserviceaccount.com:objectAdmin gs://your-transcription-bucket-name
+   ```
+
+3. **Environment Variable**:
+   ```bash
+   export GOOGLE_CLOUD_STORAGE_BUCKET=your-transcription-bucket-name
+   ```
+
+The application will automatically:
+- ✅ Use synchronous API for files ≤ 1 minute
+- ✅ Upload files > 1 minute to GCS and use LongRunningRecognize
+- ✅ Clean up GCS files after transcription
+- ✅ Handle all errors with detailed guidance
 
 ## Configuration
 
