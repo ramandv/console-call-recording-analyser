@@ -10,6 +10,7 @@ import OpenAI from 'openai';
 import ffmpeg from 'ffmpeg-static';
 import speech from '@google-cloud/speech';
 import { Storage } from '@google-cloud/storage';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // Load environment variables from .env file
 config();
@@ -33,7 +34,7 @@ program
   .option('-k, --api-key <key>', 'OpenAI API key')
   .option('-t, --transcribe-only', 'Only perform transcription, skip CSV generation')
   .option('-s, --summary-only', 'Only generate CSV summary from existing transcripts')
-  .option('-S, --service <service>', 'Transcription service to use: whisper, google, or speechmatics', 'whisper')
+  .option('-S, --service <service>', 'Transcription service to use: whisper, google, speechmatics, or gemini', 'whisper')
   .action(async (folder: string, options: TranscribeOptions) => {
     try {
       await main(folder, options);
@@ -69,8 +70,11 @@ async function main(folder: string, options: TranscribeOptions): Promise<void> {
     } else if (service === 'speechmatics') {
       console.log('🎙️ Speechmatics service selected');
       // Speechmatics credentials will be handled in the transcription function
+    } else if (service === 'gemini') {
+      console.log('💎 Gemini service selected');
+      // Gemini credentials will be handled in the transcription function
     } else {
-      throw new Error(`Unsupported transcription service: ${service}. Use 'whisper', 'google', or 'speechmatics'`);
+      throw new Error(`Unsupported transcription service: ${service}. Use 'whisper', 'google', 'speechmatics', or 'gemini'`);
     }
   }
 
@@ -122,6 +126,8 @@ async function processTranscription(folder: string, options: TranscribeOptions, 
   } else if (service === 'google') {
     await processFolderForTranscription(folder, null, model, extensions, service);
   } else if (service === 'speechmatics') {
+    await processFolderForTranscription(folder, null, model, extensions, service);
+  } else if (service === 'gemini') {
     await processFolderForTranscription(folder, null, model, extensions, service);
   } else {
     throw new Error(`Unsupported transcription service: ${service}`);
@@ -175,6 +181,9 @@ async function processFolderForTranscription(folder: string, openai: OpenAI | nu
           } else if (service === 'speechmatics') {
             console.log('🎙️ Using Speechmatics');
             await transcribeFileSpeechmatics(fullPath, txtPath);
+          } else if (service === 'gemini') {
+            console.log('💎 Using Gemini');
+            await transcribeFileGemini(fullPath, txtPath);
           } else {
             console.log(`❌ Unknown service: ${service}`);
           }
@@ -806,6 +815,144 @@ async function transcribeFileSpeechmatics(filePath: string, txtPath: string): Pr
   }
 }
 
+async function transcribeFileGemini(filePath: string, txtPath: string): Promise<{ duration: string }> {
+  console.log('🚀 GEMINI TRANSCRIPTION STARTED');
+  console.log(`📁 File: ${path.basename(filePath)}`);
+  console.log(`📂 Output: ${path.basename(txtPath)}`);
+
+  try {
+    console.log('🔄 Preparing Gemini transcription request...');
+
+    // Get Gemini API key
+    const geminiApiKey = process.env.GEMINI_API_KEY;
+    if (!geminiApiKey) {
+      throw new Error('Gemini API key not provided. Set GEMINI_API_KEY environment variable');
+    }
+
+    const fileExt = path.extname(filePath).toLowerCase();
+    console.log(`📁 Processing file: ${path.basename(filePath)}`);
+    console.log(`🎵 File format: ${fileExt}`);
+
+    // Read the audio file
+    console.log(`📖 Reading audio file...`);
+    const audioBuffer = await fs.readFile(filePath);
+    console.log(`✅ File read successfully, size: ${audioBuffer.length} bytes`);
+
+    const fileSize = (audioBuffer.length / 1024 / 1024).toFixed(2);
+    console.log(`📏 File size: ${fileSize} MB`);
+
+    // Initialize Gemini
+    console.log('💎 Initializing Gemini client...');
+    const genAI = new GoogleGenerativeAI(geminiApiKey);
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    console.log('✅ Gemini Flash 1.5 initialized');
+
+    // Convert audio buffer to base64
+    const audioBase64 = audioBuffer.toString('base64');
+    const mimeType = getMimeType(fileExt);
+
+    console.log('🎙️ Sending request to Gemini API...');
+    console.log('⏳ Processing audio file...');
+
+    // Create the prompt for both transcription and summary in one request
+    const prompt = `This is a phone call recording between a customer care representative and a customer. Please transcribe this audio file and provide a summary. Identify speakers as "Speaker 1" (customer care representative) and "Speaker 2" (customer). Format your response as follows:
+
+SUMMARY:
+[Provide a concise summary of the key points, decisions, and important information from the conversation]
+
+TRANSCRIPTION:
+[Provide the full transcription with speaker identification (Speaker 1/Speaker 2), proper punctuation and formatting]`;
+
+    // Generate content with audio
+    const result = await model.generateContent([
+      {
+        inlineData: {
+          mimeType: mimeType,
+          data: audioBase64
+        }
+      },
+      prompt
+    ]);
+
+    console.log('✅ Received response from Gemini API');
+
+    const response = await result.response;
+    const fullResponse = response.text();
+
+    if (!fullResponse.trim()) {
+      console.warn('⚠️  No response received from Gemini');
+      console.log('💡 This could mean:');
+      console.log('   - No speech detected in the audio');
+      console.log('   - Audio quality is too low');
+      console.log('   - Unsupported audio format');
+      await fs.writeFile(txtPath, '[No speech detected]', 'utf8');
+    } else {
+      console.log(`💾 Saving transcription to: ${txtPath}`);
+
+      // Parse the response to extract summary and transcription
+      const summaryMatch = fullResponse.match(/SUMMARY:\s*(.*?)(?=TRANSCRIPTION:|$)/s);
+      const transcriptionMatch = fullResponse.match(/TRANSCRIPTION:\s*(.*)/s);
+
+      let summary = summaryMatch ? summaryMatch[1].trim() : 'Summary not available';
+      let transcription = transcriptionMatch ? transcriptionMatch[1].trim() : fullResponse.trim();
+
+      // If no clear sections found, treat the whole response as transcription
+      if (!summaryMatch && !transcriptionMatch) {
+        transcription = fullResponse.trim();
+        summary = 'Summary not available - response format unclear';
+      }
+
+      // Format the final content
+      const finalContent = `📋 SUMMARY:\n${summary}\n\n${'='.repeat(80)}\n\n🎙️ FULL TRANSCRIPTION:\n${transcription}`;
+
+      console.log(`📄 Response preview: ${fullResponse.substring(0, 200)}${fullResponse.length > 200 ? '...' : ''}`);
+      await fs.writeFile(txtPath, finalContent, 'utf8');
+      console.log(`✅ Successfully saved transcription with summary to ${txtPath}`);
+    }
+
+    // Get duration for return value
+    const duration = await getAudioDuration(filePath);
+    console.log(`⏱️  Audio duration: ${duration || 'N/A'}`);
+    return { duration: duration || 'N/A' };
+
+  } catch (error: unknown) {
+    console.error(`❌ Failed to transcribe ${filePath} with Gemini`);
+    console.error('🔍 Error details:');
+
+    if (error instanceof Error) {
+      console.error(`   Message: ${error.message}`);
+
+      // Provide specific guidance based on error type
+      if (error.message.includes('API_KEY_INVALID') || error.message.includes('PERMISSION_DENIED')) {
+        console.error('   💡 Solution: Check your Gemini API key');
+        console.error('   💡 Make sure GEMINI_API_KEY is set correctly');
+      } else if (error.message.includes('FILE_TOO_LARGE')) {
+        console.error('   💡 Solution: Audio file is too large for Gemini');
+        console.error('   💡 Try a smaller file or use another service');
+      } else if (error.message.includes('UNSUPPORTED_FORMAT')) {
+        console.error('   💡 Solution: Check audio format');
+        console.error('   💡 Gemini supports: MP3, WAV, MP4, M4A, FLAC, OGG, AMR');
+      } else if (error.message.includes('QUOTA_EXCEEDED')) {
+        console.error('   💡 Solution: You may have exceeded your quota limits');
+      }
+    } else {
+      console.error(`   Unknown error: ${String(error)}`);
+    }
+
+    // Try to create a basic error transcription file
+    try {
+      const errorMessage = `[Transcription failed: ${error instanceof Error ? error.message : 'Unknown error'}]`;
+      await fs.writeFile(txtPath, errorMessage, 'utf8');
+      console.log(`💾 Saved error message to: ${txtPath}`);
+    } catch (writeError) {
+      console.error('❌ Could not write error message to file');
+      console.error(`   Write error: ${writeError instanceof Error ? writeError.message : String(writeError)}`);
+    }
+
+    return { duration: 'N/A' };
+  }
+}
+
 async function transcribeFile(filePath: string, txtPath: string, openai: OpenAI, model: string): Promise<{ duration: string }> {
   let tempWavPath: string | null = null;
 
@@ -850,7 +997,6 @@ async function transcribeFile(filePath: string, txtPath: string, openai: OpenAI,
     console.log(`📝 Transcription length: ${transcriptionLength} characters`);
 
     console.log(`💾 Saving transcription to: ${txtPath}`);
-    // Save to text file
     await fs.writeFile(txtPath, transcriptionText, 'utf8');
     console.log(`✅ Successfully saved transcription to ${txtPath}`);
 
@@ -998,6 +1144,42 @@ function parseFilenameMetadata(filename: string): { timestamp: string; phoneNumb
   }
 
   return { timestamp, phoneNumber, callType };
+}
+
+async function generateSummaryWithGemini(transcriptionText: string, outputPath: string): Promise<void> {
+  try {
+    console.log('📝 Generating summary with Gemini...');
+
+    // Get Gemini API key
+    const geminiApiKey = process.env.GEMINI_API_KEY;
+    if (!geminiApiKey) {
+      throw new Error('Gemini API key not provided. Set GEMINI_API_KEY environment variable');
+    }
+
+    // Initialize Gemini
+    const genAI = new GoogleGenerativeAI(geminiApiKey);
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+
+    const prompt = `Please provide a concise summary of the following conversation transcript. Focus on the key points, decisions made, and important information exchanged:
+
+${transcriptionText}
+
+Summary:`;
+
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const summary = response.text();
+
+    console.log(`📄 Summary generated (${summary.length} characters)`);
+    console.log(`💾 Saving summary to: ${outputPath}`);
+
+    await fs.writeFile(outputPath, summary, 'utf8');
+    console.log(`✅ Summary saved successfully`);
+
+  } catch (error: unknown) {
+    console.error(`❌ Failed to generate summary with Gemini:`, error instanceof Error ? error.message : String(error));
+    throw error;
+  }
 }
 
 async function generateCsvFile(folder: string, csvData: any[]): Promise<void> {

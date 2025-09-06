@@ -15,6 +15,8 @@ A Node.js command-line application that recursively transcribes audio/video file
 - **CSV Summary Generation**: Creates `summary.csv` with filename, duration, timestamp, phone number, and call type
 - **Filename Metadata Parsing**: Extracts TP1 (timestamp), TP3 (phone), TP4 (call type) from filenames
 - **Enhanced Console Output**: Clear separators and file-specific progress indicators
+- **AI-Powered Summaries**: Automatically generates concise summaries for Gemini transcriptions using single-prompt approach
+- **Structured Output Format**: Gemini transcriptions include both summary and full text with clear formatting
 
 ## Installation
 
@@ -79,6 +81,45 @@ npm start -- --summary-only
 npm start /path/to/folder -- --summary-only
 ```
 
+## Gemini Transcription Output Format
+
+When using the Gemini service (`--service gemini`), each transcription file includes both a summary and the full transcription text in a structured format. Gemini uses a single-prompt approach that generates both the transcription and summary in one API call.
+
+### 📋 SUMMARY:
+```
+[AI-generated concise summary of the conversation]
+```
+
+### 🎙️ FULL TRANSCRIPTION:
+```
+[Complete transcription text with proper formatting]
+```
+
+### Example Gemini Output:
+```
+📋 SUMMARY:
+The customer called to inquire about their recent order status. The representative confirmed that the order has been shipped and provided the tracking number. The customer expressed satisfaction with the service and mentioned they would recommend the company to others.
+
+
+🎙️ FULL TRANSCRIPTION:
+Hello, thank you for calling our customer service line. How can I help you today?
+
+Hi, I wanted to check on my order that I placed last week. The order number is 12345.
+
+Let me look that up for you. Yes, I can see that your order has been processed and shipped. The tracking number is 1Z999AA1234567890. You should receive it within the next 2-3 business days.
+
+Great! That's exactly what I was hoping to hear. Your service has been excellent throughout this process.
+
+We're glad to hear that! Is there anything else I can help you with today?
+
+No, that's all. Thank you very much for your assistance.
+
+You're welcome! Have a great day!
+```
+
+### Other Services
+When using Whisper, Google, or Speechmatics services, only the transcription is generated without summaries.
+
 ## CSV Output
 
 The application generates a `summary.csv` file in each processed directory containing:
@@ -132,6 +173,15 @@ npm run build
    export SPEECHMATICS_API_KEY=your-speechmatics-api-key
    ```
 4. **Supported Audio Formats**: MP3, WAV, FLAC, OGG, AMR, M4A (AMR files processed directly without conversion!)
+
+### For Gemini
+1. **Google AI Studio**: Get your API key from [Google AI Studio](https://makersuite.google.com/app/apikey)
+2. **Set Environment Variable**:
+   ```bash
+   export GEMINI_API_KEY=your-gemini-api-key
+   ```
+3. **Supported Audio Formats**: MP3, WAV, MP4, M4A, FLAC, OGG, AMR
+4. **Features**: Transcription and summarization capabilities
 
 #### Google Cloud Storage Setup for Long Audio Files
 For audio files longer than 1 minute, Google requires the audio to be stored in Google Cloud Storage:
