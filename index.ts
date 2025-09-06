@@ -696,13 +696,59 @@ async function transcribeFileSpeechmatics(filePath: string, txtPath: string): Pr
       throw new Error('Transcription timed out');
     }
 
-    // Extract transcription text from Speechmatics response
-    const transcription = transcriptionResult.results
-      ?.map((result: any) => result.alternatives?.[0]?.content || '')
-      .join(' ') || '';
+    // Extract transcription text with speaker information
+    let transcription = '';
+    let hasSpeakerInfo = false;
+
+    if (transcriptionResult.results && Array.isArray(transcriptionResult.results)) {
+      let currentSpeaker = '';
+      let currentContent = '';
+
+      transcriptionResult.results.forEach((result: any, index: number) => {
+        if (result.alternatives && result.alternatives.length > 0) {
+          const alternative = result.alternatives[0];
+          const content = alternative.content || '';
+          const speaker = alternative.speaker;
+
+          if (speaker) {
+            hasSpeakerInfo = true;
+
+            // If speaker changed, write the previous speaker's content
+            if (currentSpeaker && currentSpeaker !== speaker) {
+              transcription += `${currentSpeaker}: ${currentContent.trim()}\n`;
+              currentContent = '';
+            }
+
+            // Update current speaker and add content
+            currentSpeaker = speaker;
+            currentContent += content + ' ';
+          } else {
+            // No speaker info, just add content
+            if (currentSpeaker) {
+              currentContent += content + ' ';
+            } else {
+              transcription += content + ' ';
+            }
+          }
+        }
+      });
+
+      // Add the last speaker's content
+      if (currentSpeaker && currentContent.trim()) {
+        transcription += `${currentSpeaker}: ${currentContent.trim()}\n`;
+      }
+    }
+
+    // If no speaker info was found, fall back to regular format
+    if (!hasSpeakerInfo && transcriptionResult.results) {
+      transcription = transcriptionResult.results
+        ?.map((result: any) => result.alternatives?.[0]?.content || '')
+        .join(' ') || '';
+    }
 
     const transcriptionLength = transcription.length;
     console.log(`📝 Transcription length: ${transcriptionLength} characters`);
+    console.log(`🎙️  Speaker information included: ${hasSpeakerInfo ? 'Yes' : 'No'}`);
 
     if (!transcription.trim()) {
       console.warn('⚠️  No transcription text received from Speechmatics');
@@ -713,7 +759,7 @@ async function transcribeFileSpeechmatics(filePath: string, txtPath: string): Pr
       await fs.writeFile(txtPath, '[No speech detected]', 'utf8');
     } else {
       console.log(`💾 Saving transcription to: ${txtPath}`);
-      console.log(`📄 Transcription preview: ${transcription.substring(0, 100)}${transcription.length > 100 ? '...' : ''}`);
+      console.log(`📄 Transcription preview: ${transcription.substring(0, 200)}${transcription.length > 200 ? '...' : ''}`);
       await fs.writeFile(txtPath, transcription, 'utf8');
       console.log(`✅ Successfully saved transcription to ${txtPath}`);
     }
