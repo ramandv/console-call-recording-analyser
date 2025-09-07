@@ -11,6 +11,7 @@ import { GeminiProvider } from './api_providers/gemini-provider';
 import { SpeechmaticsProvider } from './api_providers/speechmatics-provider';
 import { GoogleProvider } from './api_providers/google-provider';
 import { WhisperProvider } from './api_providers/whisper-provider';
+import { AudioConverter } from './api_providers/audio-converter';
 
 // Load environment variables from .env file
 config();
@@ -109,12 +110,15 @@ async function processTranscription(folder: string, options: TranscribeOptions, 
   // Create provider instance based on service
   let provider: TranscriptionProvider;
 
+  // Only create AudioConverter for providers that need it
+  const converter = new AudioConverter();
+
   switch (service) {
     case 'whisper':
-      provider = new WhisperProvider();
+      provider = new WhisperProvider(converter);
       break;
     case 'google':
-      provider = new GoogleProvider();
+      provider = new GoogleProvider(converter);
       break;
     case 'speechmatics':
       provider = new SpeechmaticsProvider();

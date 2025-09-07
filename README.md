@@ -241,12 +241,22 @@ npm start -- --api-key your_api_key
 
 ## Project Structure
 
-- `index.ts` - Main TypeScript source file
-- `dist/` - Compiled JavaScript output
-- `tsconfig.json` - TypeScript configuration
-- `package.json` - Project dependencies and scripts
-- `.env.example` - Environment variables template
-- `.gitignore` - Git ignore rules (excludes .env files)
+```
+api_providers/
+├── base-provider.ts          # Interface definition for all providers
+├── audio-converter.ts        # Audio conversion utility (AMR to WAV)
+├── gemini-provider.ts        # Gemini AI transcription with speaker ID & summaries
+├── speechmatics-provider.ts  # Speechmatics transcription with diarization
+├── google-provider.ts        # Google Speech-to-Text with GCS support
+└── whisper-provider.ts       # OpenAI Whisper transcription
+
+index.ts                      # Main application entry point
+dist/                         # Compiled JavaScript output
+tsconfig.json                 # TypeScript configuration
+package.json                  # Project dependencies and scripts
+.env.example                  # Environment variables template
+.gitignore                    # Git ignore rules (excludes .env files)
+```
 
 ## Technologies Used
 

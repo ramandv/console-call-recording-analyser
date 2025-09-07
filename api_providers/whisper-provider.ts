@@ -2,9 +2,15 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import OpenAI from 'openai';
 import { TranscriptionProvider, TranscriptionResult } from './base-provider';
+import { AudioConverter } from './audio-converter';
 
 export class WhisperProvider implements TranscriptionProvider {
   name = 'whisper';
+  private converter: AudioConverter;
+
+  constructor(converter: AudioConverter) {
+    this.converter = converter;
+  }
 
   async transcribeFile(filePath: string, txtPath: string, model: string = 'whisper-1', apiKey?: string): Promise<TranscriptionResult> {
     let tempWavPath: string | null = null;
@@ -17,7 +23,7 @@ export class WhisperProvider implements TranscriptionProvider {
       if (fileExt === '.amr') {
         console.log(`🔄 Converting .amr file to WAV: ${filePath}`);
         // Convert AMR to WAV
-        const conversionResult = await this.convertAmrToWav(filePath);
+        const conversionResult = await this.converter.convertAmrToWav(filePath);
         tempWavPath = conversionResult.wavPath;
         audioFilePath = tempWavPath;
         audioFileBuffer = conversionResult.buffer;
@@ -83,37 +89,7 @@ export class WhisperProvider implements TranscriptionProvider {
     }
   }
 
-  private async convertAmrToWav(amrPath: string): Promise<{ wavPath: string; buffer: Buffer }> {
-    const { exec } = require('child_process');
-    const { promisify } = require('util');
-    const execAsync = promisify(exec);
-    const tempDir = require('os').tmpdir();
-    const wavPath = path.join(tempDir, `converted_${Date.now()}_${path.basename(amrPath, '.amr')}.wav`);
 
-    try {
-      // FFmpeg command to convert AMR to WAV (16kHz, mono, PCM)
-      const ffmpegCommand = `"${require('ffmpeg-static')}" -i "${amrPath}" -acodec pcm_s16le -ar 16000 -ac 1 -y "${wavPath}"`;
-
-      console.log(`🎵 Running FFmpeg conversion: ${ffmpegCommand}`);
-
-      const { stdout, stderr } = await execAsync(ffmpegCommand);
-
-      if (stderr) {
-        console.log(`ℹ️  FFmpeg output: ${stderr}`);
-      }
-
-      // Read the converted WAV file
-      const wavBuffer = await fs.readFile(wavPath);
-
-      return {
-        wavPath,
-        buffer: wavBuffer
-      };
-    } catch (error) {
-      console.error(`❌ FFmpeg conversion failed:`, error);
-      throw new Error(`Failed to convert AMR to WAV: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  }
 
   private getMimeType(ext: string): string {
     const mimeTypes: Record<string, string> = {
