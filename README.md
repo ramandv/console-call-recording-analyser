@@ -216,9 +216,12 @@ The application will automatically:
    cp .env.example .env
    ```
 
-2. Edit `.env` and add your OpenAI API key:
+2. Edit `.env` and add your API keys and configuration:
    ```bash
    OPENAI_API_KEY=your_actual_openai_api_key_here
+   AUDIO_SAMPLE_RATE=8000  # For 8kHz phone call AMR files
+   # AUDIO_SAMPLE_RATE=16000  # For higher quality (default)
+   GEMINI_MODEL=gemini-2.0-flash-lite  # Default Gemini model
    ```
 
 3. Run the application:
@@ -242,13 +245,19 @@ npm start -- --api-key your_api_key
 ## Project Structure
 
 ```
-api_providers/
-├── base-provider.ts          # Interface definition for all providers
-├── audio-converter.ts        # Audio conversion utility (AMR to WAV)
+transcript_providers/
+├── base-provider.ts          # Interface definition for all transcription providers
 ├── gemini-provider.ts        # Gemini AI transcription with speaker ID & summaries
 ├── speechmatics-provider.ts  # Speechmatics transcription with diarization
 ├── google-provider.ts        # Google Speech-to-Text with GCS support
 └── whisper-provider.ts       # OpenAI Whisper transcription
+
+audio_utils/
+└── audio-converter.ts        # Audio conversion utility (AMR to WAV with configurable sample rate)
+
+analysis_providers/
+├── base-analysis.ts          # Interface definition for analysis providers
+└── basic-analysis.ts         # Basic transcription analysis with sentiment detection
 
 index.ts                      # Main application entry point
 dist/                         # Compiled JavaScript output

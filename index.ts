@@ -6,12 +6,12 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { TranscriptionProvider } from './api_providers/base-provider';
-import { GeminiProvider } from './api_providers/gemini-provider';
-import { SpeechmaticsProvider } from './api_providers/speechmatics-provider';
-import { GoogleProvider } from './api_providers/google-provider';
-import { WhisperProvider } from './api_providers/whisper-provider';
-import { AudioConverter } from './api_providers/audio-converter';
+import { TranscriptionProvider } from './transcript_providers/base-provider';
+import { GeminiProvider } from './transcript_providers/gemini-provider';
+import { SpeechmaticsProvider } from './transcript_providers/speechmatics-provider';
+import { GoogleProvider } from './transcript_providers/google-provider';
+import { WhisperProvider } from './transcript_providers/whisper-provider';
+import { AudioConverter } from './audio_utils/audio-converter';
 
 // Load environment variables from .env file
 config();

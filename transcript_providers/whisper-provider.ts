@@ -2,7 +2,7 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import OpenAI from 'openai';
 import { TranscriptionProvider, TranscriptionResult } from './base-provider';
-import { AudioConverter } from './audio-converter';
+import { AudioConverter } from '../audio_utils/audio-converter';
 
 export class WhisperProvider implements TranscriptionProvider {
   name = 'whisper';

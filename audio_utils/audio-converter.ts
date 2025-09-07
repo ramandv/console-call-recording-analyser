@@ -8,17 +8,29 @@ export interface ConversionResult {
   buffer: Buffer;
 }
 
+export interface AudioConverterConfig {
+  sampleRate?: number; // Default: 16000 (16kHz)
+}
+
 export class AudioConverter {
+  private config: Required<AudioConverterConfig>;
+
+  constructor(config: AudioConverterConfig = {}) {
+    this.config = {
+      sampleRate: config.sampleRate ?? parseInt(process.env.AUDIO_SAMPLE_RATE || '16000')
+    };
+  }
+
   async convertAmrToWav(amrPath: string): Promise<ConversionResult> {
     const execAsync = promisify(exec);
     const tempDir = require('os').tmpdir();
     const wavPath = path.join(tempDir, `converted_${Date.now()}_${path.basename(amrPath, '.amr')}.wav`);
 
     try {
-      // FFmpeg command to convert AMR to WAV (16kHz, mono, PCM)
-      const ffmpegCommand = `"${require('ffmpeg-static')}" -i "${amrPath}" -acodec pcm_s16le -ar 16000 -ac 1 -y "${wavPath}"`;
+      // FFmpeg command to convert AMR to WAV with configurable sample rate
+      const ffmpegCommand = `"${require('ffmpeg-static')}" -i "${amrPath}" -acodec pcm_s16le -ar ${this.config.sampleRate} -ac 1 -y "${wavPath}"`;
 
-      console.log(`🎵 Running FFmpeg conversion: ${ffmpegCommand}`);
+      console.log(`🎵 Running FFmpeg conversion (${this.config.sampleRate}Hz): ${ffmpegCommand}`);
 
       const { stdout, stderr } = await execAsync(ffmpegCommand);
 

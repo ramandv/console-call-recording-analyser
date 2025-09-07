@@ -3,8 +3,19 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import { TranscriptionProvider, TranscriptionResult } from './base-provider';
 
+export interface GeminiConfig {
+  model?: string; // Default: 'gemini-2.0-flash-lite'
+}
+
 export class GeminiProvider implements TranscriptionProvider {
   name = 'gemini';
+  private config: Required<GeminiConfig>;
+
+  constructor(config: GeminiConfig = {}) {
+    this.config = {
+      model: config.model ?? process.env.GEMINI_MODEL ?? 'gemini-2.0-flash-lite'
+    };
+  }
 
   async transcribeFile(filePath: string, txtPath: string): Promise<TranscriptionResult> {
     console.log('🚀 GEMINI TRANSCRIPTION STARTED');
@@ -35,8 +46,8 @@ export class GeminiProvider implements TranscriptionProvider {
       // Initialize Gemini
       console.log('💎 Initializing Gemini client...');
       const genAI = new GoogleGenerativeAI(geminiApiKey);
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-      console.log('✅ Gemini Flash 1.5 initialized');
+      const model = genAI.getGenerativeModel({ model: this.config.model });
+      console.log(`✅ Gemini ${this.config.model} initialized`);
 
       // Convert audio buffer to base64
       const audioBase64 = audioBuffer.toString('base64');

@@ -3,7 +3,7 @@ import * as path from 'path';
 import speech from '@google-cloud/speech';
 import { Storage } from '@google-cloud/storage';
 import { TranscriptionProvider, TranscriptionResult } from './base-provider';
-import { AudioConverter } from './audio-converter';
+import { AudioConverter } from '../audio_utils/audio-converter';
 
 export class GoogleProvider implements TranscriptionProvider {
   name = 'google';
