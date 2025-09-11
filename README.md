@@ -158,18 +158,24 @@ When using Whisper, Google, or Speechmatics services, only the transcription is 
 
 ## CSV Output
 
-The application generates a `summary.csv` file in each processed directory containing:
+The application generates a `summary.csv` file in each processed directory. It includes file metadata and, when available, key fields from the per-file analysis JSON (`*_analysis.json`).
 
 - **Filename**: Original audio file name
 - **Duration**: Audio duration in HH:MM:SS format
+- **Has Transcription**: Yes/No if a `.txt` exists
+- **Has Analysis**: Yes/No if an `_analysis.json` exists
 - **Timestamp**: Parsed from TP1 token in filename (YYYY-MM-DD HH:MM:SS)
 - **Phone Number**: Parsed from TP3 token in filename
 - **Call Type**: Parsed from TP4 token in filename (e.g., "outgoing", "incoming")
+- **Sentiment, Confidence, Payment Intent, Next Best Action, To-Do**: From analysis JSON
+- **Call Tags Count, Concerns Count**: Counts from analysis arrays
+- **Profile Hygiene Flags**: Missing Photo, Missing Verification, Thin Bio, Filter Mismatch Noted
+- **Advanced Insights**: Emotional State, Conversion Probability, Urgency Level, Rapport Score, Missed Opportunity
 
-Example CSV output:
+Example CSV output (columns abbreviated for brevity):
 ```csv
-Filename,Duration,Timestamp,Phone Number,Call Type
-"recording-TP11755659148284TP2TP37561074523TP4outgoing.amr","00:00:20","2025-08-20 03:05:48","7561074523","outgoing"
+Filename,Duration,Has Transcription,Has Analysis,Timestamp,Phone Number,Call Type,Sentiment,Confidence,Payment Intent,Next Best Action
+"recording-TP11755659148284TP2TP37561074523TP4outgoing.amr","00:00:20","Yes","Yes","2025-08-20 03:05:48","7561074523","outgoing","neutral","0.80","not_discussed","Share 2 high-fit profiles..."
 ```
 
 ## Analysis Output

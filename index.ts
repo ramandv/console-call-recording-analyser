@@ -275,12 +275,54 @@ async function processFolderForSummary(folder: string, extensions: string[]): Pr
         // Add to CSV regardless of transcription status
         const metadata = parseFilenameMetadata(item.name);
         const duration = await getAudioDuration(fullPath);
-        csvData.push({
+
+        // Try to read analysis JSON if present
+        const analysisJsonPath = path.join(folder, path.basename(item.name, ext) + '_analysis.json');
+        let analysis: any | null = null;
+        try {
+          const analysisContent = await fs.readFile(analysisJsonPath, 'utf8');
+          analysis = JSON.parse(analysisContent);
+          console.log(`✅ Found analysis file: ${analysisJsonPath}`);
+        } catch {
+          // No analysis available
+          analysis = null;
+          console.log(`ℹ️  No analysis found for: ${item.name}`);
+        }
+
+        const row: any = {
           filename: item.name,
           duration: duration || 'N/A',
           hasTranscription: hasTranscription,
+          hasAnalysis: Boolean(analysis),
           ...metadata
-        });
+        };
+
+        if (analysis) {
+          // Map selected analysis fields into flat CSV-friendly values
+          row.sentiment = analysis.sentiment ?? '';
+          row.confidence = analysis.confidence ?? '';
+          row.paymentIntent = analysis.payment_intent ?? '';
+          row.nextBestAction = analysis.next_best_action ?? '';
+          row.todo = Array.isArray(analysis.todo) ? analysis.todo.join(' | ') : '';
+          row.callTagsCount = Array.isArray(analysis.call_tags) ? analysis.call_tags.length : '';
+          row.concernsCount = Array.isArray(analysis.concerns) ? analysis.concerns.length : '';
+
+          const hygiene = analysis.profile_hygiene || {};
+          row.missingPhoto = typeof hygiene.missing_photo === 'boolean' ? hygiene.missing_photo : '';
+          row.missingVerification = typeof hygiene.missing_verification === 'boolean' ? hygiene.missing_verification : '';
+          row.thinBio = typeof hygiene.thin_bio === 'boolean' ? hygiene.thin_bio : '';
+          row.filterMismatchNoted = typeof hygiene.filter_mismatch_noted === 'boolean' ? hygiene.filter_mismatch_noted : '';
+
+          const insights = analysis.advanced_insights || {};
+          row.emotionalState = insights.emotional_state ?? '';
+          row.conversionProbability = insights.conversion_probability ?? '';
+          row.urgencyLevel = insights.urgency_level ?? '';
+          const agentFeedback = insights.agent_feedback || {};
+          row.rapportScore = agentFeedback.rapport_score ?? '';
+          row.missedOpportunity = agentFeedback.missed_opportunity ?? '';
+        }
+
+        csvData.push(row);
         processedCount++;
       } else {
         console.log(`❌ SKIPPING: ${item.name} (unsupported format: ${ext})`);
@@ -424,19 +466,67 @@ async function generateCsvFile(folder: string, csvData: any[]): Promise<void> {
   const csvPath = path.join(folder, 'summary.csv');
 
   try {
-    // CSV header
-    const headers = ['Filename', 'Duration', 'Has Transcription', 'Timestamp', 'Phone Number', 'Call Type'];
+    // CSV header (includes analysis fields when available)
+    const headers = [
+      'Filename',
+      'Duration',
+      'Has Transcription',
+      'Has Analysis',
+      'Timestamp',
+      'Phone Number',
+      'Call Type',
+      'Sentiment',
+      'Confidence',
+      'Payment Intent',
+      'Next Best Action',
+      'To-Do',
+      'Call Tags Count',
+      'Concerns Count',
+      'Missing Photo',
+      'Missing Verification',
+      'Thin Bio',
+      'Filter Mismatch Noted',
+      'Emotional State',
+      'Conversion Probability',
+      'Urgency Level',
+      'Rapport Score',
+      'Missed Opportunity'
+    ];
+
+    const csvEscape = (val: unknown): string => {
+      const s = String(val ?? '');
+      const escaped = s.replace(/"/g, '""');
+      return `"${escaped}"`;
+    };
+
     let csvContent = headers.join(',') + '\n';
 
     // Add data rows
     for (const row of csvData) {
       const values = [
-        `"${row.filename}"`,
-        `"${row.duration}"`,
-        `"${row.hasTranscription ? 'Yes' : 'No'}"`,
-        `"${row.timestamp}"`,
-        `"${row.phoneNumber}"`,
-        `"${row.callType}"`
+        csvEscape(row.filename),
+        csvEscape(row.duration),
+        csvEscape(row.hasTranscription ? 'Yes' : 'No'),
+        csvEscape(row.hasAnalysis ? 'Yes' : 'No'),
+        csvEscape(row.timestamp),
+        csvEscape(row.phoneNumber),
+        csvEscape(row.callType),
+        csvEscape(row.sentiment),
+        csvEscape(row.confidence),
+        csvEscape(row.paymentIntent),
+        csvEscape(row.nextBestAction),
+        csvEscape(row.todo),
+        csvEscape(row.callTagsCount),
+        csvEscape(row.concernsCount),
+        csvEscape(typeof row.missingPhoto === 'boolean' ? (row.missingPhoto ? 'Yes' : 'No') : ''),
+        csvEscape(typeof row.missingVerification === 'boolean' ? (row.missingVerification ? 'Yes' : 'No') : ''),
+        csvEscape(typeof row.thinBio === 'boolean' ? (row.thinBio ? 'Yes' : 'No') : ''),
+        csvEscape(typeof row.filterMismatchNoted === 'boolean' ? (row.filterMismatchNoted ? 'Yes' : 'No') : ''),
+        csvEscape(row.emotionalState),
+        csvEscape(row.conversionProbability),
+        csvEscape(row.urgencyLevel),
+        csvEscape(row.rapportScore),
+        csvEscape(row.missedOpportunity)
       ];
       csvContent += values.join(',') + '\n';
     }
