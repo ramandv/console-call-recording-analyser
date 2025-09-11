@@ -12,6 +12,8 @@ import { SpeechmaticsProvider } from './transcript_providers/speechmatics-provid
 import { GoogleProvider } from './transcript_providers/google-provider';
 import { WhisperProvider } from './transcript_providers/whisper-provider';
 import { AudioConverter } from './audio_utils/audio-converter';
+import { AnalysisProvider } from './analysis_providers/base-analysis';
+import { GeminiAnalysisProvider } from './analysis_providers/gemini-analysis';
 
 // Load environment variables from .env file
 config();
@@ -21,21 +23,25 @@ interface TranscribeOptions {
   apiKey?: string;
   transcribeOnly?: boolean;
   summaryOnly?: boolean;
+  analyseOnly?: boolean;
   service?: string;
+  analysisService?: string;
 }
 
 const program = new Command();
 
 program
   .name('transcribe')
-  .description('Transcribe audio/video files and generate summaries using various AI services')
+  .description('Transcribe audio/video files, generate summaries, and analyze audio files using various AI services')
   .version('1.0.0')
   .argument('[folder]', 'Folder path to process', './input')
   .option('-m, --model <model>', 'Whisper model to use', 'whisper-1')
   .option('-k, --api-key <key>', 'OpenAI API key')
   .option('-t, --transcribe-only', 'Only perform transcription, skip CSV generation')
   .option('-s, --summary-only', 'Only generate CSV summary from existing transcripts')
+  .option('-a, --analyse-only', 'Only perform analysis on audio files')
   .option('-S, --service <service>', 'Transcription service to use: whisper, google, speechmatics, or gemini', 'whisper')
+  .option('-A, --analysis-service <service>', 'Analysis service to use: gemini', 'gemini')
   .action(async (folder: string, options: TranscribeOptions) => {
     try {
       await main(folder, options);
@@ -46,16 +52,25 @@ program
   });
 
 async function main(folder: string, options: TranscribeOptions): Promise<void> {
-  const { transcribeOnly, summaryOnly, model = 'whisper-1', apiKey, service = 'whisper' } = options;
+  const { transcribeOnly, summaryOnly, analyseOnly, model = 'whisper-1', apiKey, service = 'whisper', analysisService = 'gemini' } = options;
 
   // Determine operation mode
-  const mode = transcribeOnly ? 'transcribe' : summaryOnly ? 'summary' : 'both';
+  let mode: string;
+  if (transcribeOnly) {
+    mode = 'transcribe';
+  } else if (summaryOnly) {
+    mode = 'summary';
+  } else if (analyseOnly) {
+    mode = 'analyse';
+  } else {
+    mode = 'both';
+  }
 
   console.log(`🚀 Starting ${mode} process...`);
   console.log(`📁 Target folder: ${folder}`);
-  console.log(`🔊 Transcription service: ${service}`);
 
   if (mode === 'transcribe' || mode === 'both') {
+    console.log(`🔊 Transcription service: ${service}`);
     if (service === 'whisper') {
       console.log(`🤖 Model: ${model}`);
       // Get OpenAI API key
@@ -72,6 +87,15 @@ async function main(folder: string, options: TranscribeOptions): Promise<void> {
       console.log('💎 Gemini service selected');
     } else {
       throw new Error(`Unsupported transcription service: ${service}. Use 'whisper', 'google', 'speechmatics', or 'gemini'`);
+    }
+  }
+
+  if (mode === 'analyse' || mode === 'both') {
+    console.log(`🔍 Analysis service: ${analysisService}`);
+    if (analysisService === 'gemini') {
+      console.log('💎 Gemini analysis service selected');
+    } else {
+      throw new Error(`Unsupported analysis service: ${analysisService}. Use 'gemini'`);
     }
   }
 
@@ -99,6 +123,12 @@ async function main(folder: string, options: TranscribeOptions): Promise<void> {
     console.log('🔄 Starting summary generation...');
     await processSummary(folder, supportedExtensions);
     console.log('✅ Summary generation completed');
+  }
+
+  if (mode === 'analyse' || mode === 'both') {
+    console.log('🔄 Starting analysis process...');
+    await processAnalysis(folder, options);
+    console.log('✅ Analysis completed');
   }
 
   console.log(`✅ ${mode.charAt(0).toUpperCase() + mode.slice(1)} process completed successfully`);
@@ -135,6 +165,23 @@ async function processTranscription(folder: string, options: TranscribeOptions, 
 
 async function processSummary(folder: string, extensions: string[]): Promise<void> {
   await processFolderForSummary(folder, extensions);
+}
+
+async function processAnalysis(folder: string, options: TranscribeOptions): Promise<void> {
+  const { analysisService = 'gemini' } = options;
+
+  // Create provider instance based on service
+  let provider: AnalysisProvider;
+
+  switch (analysisService) {
+    case 'gemini':
+      provider = new GeminiAnalysisProvider();
+      break;
+    default:
+      throw new Error(`Unsupported analysis service: ${analysisService}. Use 'gemini'`);
+  }
+
+  await processFolderForAnalysis(folder, provider, options);
 }
 
 async function processFolderForTranscription(folder: string, provider: TranscriptionProvider, options: TranscribeOptions): Promise<void> {
@@ -251,6 +298,57 @@ async function processFolderForSummary(folder: string, extensions: string[]): Pr
   console.log(`   • Processed: ${processedCount} files`);
   console.log(`   • Subdirectories: ${dirCount}`);
   console.log(`   • CSV generated: summary.csv`);
+  console.log(`${'='.repeat(80)}\n`);
+}
+
+async function processFolderForAnalysis(folder: string, provider: AnalysisProvider, options: TranscribeOptions): Promise<void> {
+  console.log(`\n${'='.repeat(80)}`);
+  console.log(`📂 ANALYSIS - SCANNING DIRECTORY: ${folder}`);
+  console.log(`${'='.repeat(80)}`);
+
+  const items = await fs.readdir(folder, { withFileTypes: true });
+  console.log(`📋 Found ${items.length} items in ${folder}\n`);
+
+  let processedCount = 0;
+  let skippedCount = 0;
+  let dirCount = 0;
+
+  for (const item of items) {
+    const fullPath = path.join(folder, item.name);
+
+    if (item.isDirectory()) {
+      console.log(`📁 Entering subdirectory: ${fullPath}`);
+      dirCount++;
+      await processFolderForAnalysis(fullPath, provider, options);
+    } else if (item.isFile()) {
+      const ext = path.extname(item.name).toLowerCase();
+      if (['.mp3', '.wav', '.mp4', '.m4a', '.flac', '.ogg', '.amr'].includes(ext)) {
+        console.log(`\n${'-'.repeat(60)}`);
+        console.log(`🔍 ANALYZING FILE: ${item.name}`);
+        console.log(`${'-'.repeat(60)}`);
+
+        const jsonPath = path.join(folder, path.basename(item.name, ext) + '_analysis.json');
+        try {
+          await fs.access(jsonPath);
+          console.log(`⏭️  SKIPPING: Analysis already exists`);
+          skippedCount++;
+        } catch {
+          console.log(`🔍 STARTING ANALYSIS...`);
+          console.log(`🔧 Service: ${provider.name}`);
+          await provider.analyzeTranscription(fullPath);
+          processedCount++;
+        }
+      } else {
+        console.log(`❌ SKIPPING: ${item.name} (unsupported format: ${ext})`);
+      }
+    }
+  }
+
+  console.log(`\n${'='.repeat(80)}`);
+  console.log(`📊 ANALYSIS SUMMARY: ${folder}`);
+  console.log(`   • Processed: ${processedCount} files`);
+  console.log(`   • Skipped: ${skippedCount} files`);
+  console.log(`   • Subdirectories: ${dirCount}`);
   console.log(`${'='.repeat(80)}\n`);
 }
 

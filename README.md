@@ -1,14 +1,16 @@
-# Call Recording Transcriber
+# Call Recording Transcriber & Analyzer
 
-A Node.js command-line application that recursively transcribes audio/video files in a folder using OpenAI Whisper API.
+A Node.js command-line application that recursively transcribes audio/video files in a folder and analyzes transcriptions using various AI services.
 
 ## Features
 
 - **Recursive file processing**: Traverses all subfolders to find audio/video files
 - **Supported formats**: mp3, wav, mp4, m4a, flac, ogg, amr (with FFmpeg conversion)
 - **Default input folder**: `./input` (can be overridden)
-- **Whisper model**: Uses OpenAI's Whisper model for high-quality transcription
+- **Multiple Transcription Services**: OpenAI Whisper, Google Speech-to-Text, Speechmatics, and Gemini
 - **Skip existing transcriptions**: If a `.txt` file already exists for an audio/video file, it skips processing
+- **AI-Powered Analysis**: Analyze transcriptions using Gemini AI for comprehensive insights
+- **Multiple Operation Modes**: Full process, transcription-only, summary-only, or analysis-only
 - **OpenAI API authentication**: Supports API key via `--api-key` option or `OPENAI_API_KEY` environment variable
 - **TypeScript**: Fully typed with TypeScript for better development experience
 - **Comprehensive debug logging**: Detailed progress information and error reporting
@@ -17,6 +19,7 @@ A Node.js command-line application that recursively transcribes audio/video file
 - **Enhanced Console Output**: Clear separators and file-specific progress indicators
 - **AI-Powered Summaries**: Automatically generates concise summaries for Gemini transcriptions using single-prompt approach
 - **Structured Output Format**: Gemini transcriptions include both summary and full text with clear formatting
+- **Modular Provider Architecture**: Extensible design for adding new transcription and analysis services
 
 ## Installation
 
@@ -81,6 +84,15 @@ npm start -- --summary-only
 npm start /path/to/folder -- --summary-only
 ```
 
+#### Analysis Only
+```bash
+# Analyze audio files directly without transcription or CSV generation
+npm start -- --analyse-only
+
+# With custom folder
+npm start /path/to/folder -- --analyse-only
+```
+
 ## Gemini Transcription Output Format
 
 When using the Gemini service (`--service gemini`), each transcription file includes both a summary and the full transcription text in a structured format. Gemini uses a single-prompt approach that generates both the transcription and summary in one API call.
@@ -134,6 +146,74 @@ Example CSV output:
 ```csv
 Filename,Duration,Timestamp,Phone Number,Call Type
 "recording-TP11755659148284TP2TP37561074523TP4outgoing.amr","00:00:20","2025-08-20 03:05:48","7561074523","outgoing"
+```
+
+## Analysis Output
+
+The application can analyze audio files directly and generate structured JSON analysis files. Each audio file gets a corresponding analysis file (`_analysis.json`).
+
+### Analysis Services
+
+#### Gemini Analysis
+Uses Google's Gemini AI to provide comprehensive analysis including:
+- Sentiment analysis
+- Key conversation points extraction
+- Call classification and tagging
+- Next best action recommendations
+- Structured JSON output following a predefined schema
+
+### Analysis Output Format
+
+Analysis results are saved as JSON files with the following structure:
+
+```json
+{
+  "summary": "Brief summary of the analysis",
+  "keyPoints": [
+    "Key point 1",
+    "Key point 2"
+  ],
+  "sentiment": "positive | negative | neutral",
+  "metadata": {
+    "wordCount": 150,
+    "lineCount": 25,
+    "positiveScore": 3,
+    "negativeScore": 0,
+    "fileName": "recording.txt"
+  }
+}
+```
+
+### Example Gemini Analysis Output:
+```json
+{
+  "sentiment": "neutral",
+  "confidence": 0.8,
+  "call_tags": [
+    {
+      "tag": "introduction",
+      "speaker": "agent",
+      "quote": "We focus on verified, serious profiles for second marriages.",
+      "quality_score": 0.9
+    }
+  ],
+  "concerns": [
+    {
+      "concern": "User not getting quality matches",
+      "quote": "Most suggestions so far aren't relevant to my preferences.",
+      "quality_score": 0.8
+    }
+  ],
+  "profile_hygiene": {
+    "missing_photo": false,
+    "missing_verification": false,
+    "thin_bio": false,
+    "filter_mismatch_noted": false
+  },
+  "payment_intent": "not_discussed",
+  "next_best_action": "Share 2 high-fit profiles and offer a short RM-facilitated video meet",
+  "todo": ["Mark for profile improvement tips", "Schedule a follow-up call"]
+}
 ```
 
 ## Development
@@ -257,7 +337,7 @@ audio_utils/
 
 analysis_providers/
 ├── base-analysis.ts          # Interface definition for analysis providers
-└── basic-analysis.ts         # Basic transcription analysis with sentiment detection
+└── gemini-analysis.ts        # Gemini AI-powered transcription analysis with structured JSON output
 
 index.ts                      # Main application entry point
 dist/                         # Compiled JavaScript output
