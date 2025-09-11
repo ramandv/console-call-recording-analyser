@@ -3,12 +3,6 @@
   "confidence": 0.0,
   "call_tags": [],
   "concerns": [],
-  "profile_hygiene": {
-    "missing_photo": false,
-    "missing_verification": false,
-    "thin_bio": false,
-    "filter_mismatch_noted": false
-  },
   "payment_intent": "not_discussed",
   "next_best_action": "The call transcript or audio was not provided; please provide it for analysis.",
   "todo": ["No action needed"]

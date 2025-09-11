@@ -169,7 +169,6 @@ The application generates a `summary.csv` file in each processed directory. It i
 - **Call Type**: Parsed from TP4 token in filename (e.g., "outgoing", "incoming")
 - **Sentiment, Confidence, Payment Intent, Next Best Action, To-Do**: From analysis JSON
 - **Call Tags Count, Concerns Count**: Counts from analysis arrays
-- **Profile Hygiene Flags**: Missing Photo, Missing Verification, Thin Bio, Filter Mismatch Noted
 - **Advanced Insights**: Emotional State, Conversion Probability, Urgency Level, Rapport Score, Missed Opportunity
 
 Example CSV output (columns abbreviated for brevity):
@@ -234,12 +233,6 @@ Analysis results are saved as JSON files with the following structure:
       "quality_score": 0.8
     }
   ],
-  "profile_hygiene": {
-    "missing_photo": false,
-    "missing_verification": false,
-    "thin_bio": false,
-    "filter_mismatch_noted": false
-  },
   "payment_intent": "not_discussed",
   "next_best_action": "Share 2 high-fit profiles and offer a short RM-facilitated video meet",
   "todo": ["Mark for profile improvement tips", "Schedule a follow-up call"]

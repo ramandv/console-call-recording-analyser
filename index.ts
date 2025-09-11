@@ -307,12 +307,6 @@ async function processFolderForSummary(folder: string, extensions: string[]): Pr
           row.callTagsCount = Array.isArray(analysis.call_tags) ? analysis.call_tags.length : '';
           row.concernsCount = Array.isArray(analysis.concerns) ? analysis.concerns.length : '';
 
-          const hygiene = analysis.profile_hygiene || {};
-          row.missingPhoto = typeof hygiene.missing_photo === 'boolean' ? hygiene.missing_photo : '';
-          row.missingVerification = typeof hygiene.missing_verification === 'boolean' ? hygiene.missing_verification : '';
-          row.thinBio = typeof hygiene.thin_bio === 'boolean' ? hygiene.thin_bio : '';
-          row.filterMismatchNoted = typeof hygiene.filter_mismatch_noted === 'boolean' ? hygiene.filter_mismatch_noted : '';
-
           const insights = analysis.advanced_insights || {};
           row.emotionalState = insights.emotional_state ?? '';
           row.conversionProbability = insights.conversion_probability ?? '';
@@ -482,10 +476,6 @@ async function generateCsvFile(folder: string, csvData: any[]): Promise<void> {
       'To-Do',
       'Call Tags Count',
       'Concerns Count',
-      'Missing Photo',
-      'Missing Verification',
-      'Thin Bio',
-      'Filter Mismatch Noted',
       'Emotional State',
       'Conversion Probability',
       'Urgency Level',
@@ -518,10 +508,6 @@ async function generateCsvFile(folder: string, csvData: any[]): Promise<void> {
         csvEscape(row.todo),
         csvEscape(row.callTagsCount),
         csvEscape(row.concernsCount),
-        csvEscape(typeof row.missingPhoto === 'boolean' ? (row.missingPhoto ? 'Yes' : 'No') : ''),
-        csvEscape(typeof row.missingVerification === 'boolean' ? (row.missingVerification ? 'Yes' : 'No') : ''),
-        csvEscape(typeof row.thinBio === 'boolean' ? (row.thinBio ? 'Yes' : 'No') : ''),
-        csvEscape(typeof row.filterMismatchNoted === 'boolean' ? (row.filterMismatchNoted ? 'Yes' : 'No') : ''),
         csvEscape(row.emotionalState),
         csvEscape(row.conversionProbability),
         csvEscape(row.urgencyLevel),

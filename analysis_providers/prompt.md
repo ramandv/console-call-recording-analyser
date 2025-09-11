@@ -29,12 +29,6 @@ Classify sentiment, tag call topics, capture user concerns, and recommend follow
       "quality_score": 0.0
     }
   ],
-  "profile_hygiene": {
-    "missing_photo": false,
-    "missing_verification": false,
-    "thin_bio": false,
-    "filter_mismatch_noted": false
-  },
   "payment_intent": "not_discussed | asked_price_only | hesitant | likely_to_buy | purchased",
   "next_best_action": "Short sentence describing the most relevant follow-up for this user",
   "todo": [
@@ -101,13 +95,11 @@ Classify sentiment, tag call topics, capture user concerns, and recommend follow
     
 8. Add root `"confidence"` (0–1). Optionally include `"quality_score"` (0–1) per tag/concern.
     
-9. If weak profile elements are mentioned, populate `profile_hygiene` booleans.
-    
-10. Use `payment_intent` **only** if pricing willingness is explicitly discussed.
-    
-11. Don’t tag `Not interested in paying yet` unless the **user** says so.
-    
-12. Include a single‑sentence `next_best_action` with rationale.
+9. Use `payment_intent` **only** if pricing willingness is explicitly discussed.
+
+10. Don’t tag `Not interested in paying yet` unless the **user** says so.
+
+11. Include a single‑sentence `next_best_action` with rationale.
     
 
 ---
@@ -164,7 +156,6 @@ Add this block **only if confidently inferable**. Omit keys you cannot support 
   "concerns": [
     { "concern": "User not getting quality matches", "quote": "Most suggestions so far aren’t relevant to my preferences.", "quality_score": 0.8 }
   ],
-  "profile_hygiene": { "missing_photo": false, "missing_verification": false, "thin_bio": false, "filter_mismatch_noted": false },
   "payment_intent": "asked_price_only",
   "next_best_action": "Share 2 high‑fit profiles and offer a short RM‑facilitated video meet to build trust before purchase.",
   "todo": ["Mark for profile improvement tips", "Schedule a follow‑up call"],
