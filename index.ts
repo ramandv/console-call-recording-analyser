@@ -24,6 +24,7 @@ interface TranscribeOptions {
   transcribeOnly?: boolean;
   summaryOnly?: boolean;
   analyseOnly?: boolean;
+  overviewOnly?: boolean;
   service?: string;
   analysisService?: string;
   analysisMaxMb?: number | string;
@@ -42,6 +43,7 @@ program
   .option('-t, --transcribe-only', 'Only perform transcription, skip CSV generation')
   .option('-s, --summary-only', 'Only generate CSV summary from existing transcripts')
   .option('-a, --analyse-only', 'Only perform analysis on audio files')
+  .option('-o, --overview-only', 'Only generate overview stats from existing summary.csv files')
   .option('-S, --service <service>', 'Transcription service to use: whisper, google, speechmatics, or gemini', 'whisper')
   .option('-A, --analysis-service <service>', 'Analysis service to use: gemini', 'gemini')
   .option('-M, --analysis-max-mb <mb>', 'Maximum file size (MB) for analysis', '2')
@@ -56,7 +58,7 @@ program
   });
 
 async function main(folder: string, options: TranscribeOptions): Promise<void> {
-  const { transcribeOnly, summaryOnly, analyseOnly, model = 'whisper-1', apiKey, service = 'whisper', analysisService = 'gemini' } = options;
+  const { transcribeOnly, summaryOnly, analyseOnly, overviewOnly, model = 'whisper-1', apiKey, service = 'whisper', analysisService = 'gemini' } = options;
 
   // Determine operation mode
   let mode: string;
@@ -66,6 +68,8 @@ async function main(folder: string, options: TranscribeOptions): Promise<void> {
     mode = 'summary';
   } else if (analyseOnly) {
     mode = 'analyse';
+  } else if (overviewOnly) {
+    mode = 'overview';
   } else {
     mode = 'both';
   }
@@ -107,6 +111,14 @@ async function main(folder: string, options: TranscribeOptions): Promise<void> {
     } else {
       throw new Error(`Unsupported analysis service: ${analysisService}. Use 'gemini'`);
     }
+  }
+
+  if (mode === 'overview') {
+    console.log('🔄 Starting overview generation...');
+    await processOverviewAtBase(folder);
+    console.log('✅ Overview generation completed');
+    console.log(`✅ ${mode.charAt(0).toUpperCase() + mode.slice(1)} process completed successfully`);
+    return;
   }
 
   // Check if folder exists
@@ -364,6 +376,335 @@ async function processFolderForSummary(folder: string, extensions: string[], agg
   console.log(`   • Subdirectories: ${dirCount}`);
   console.log(`   • CSV generated: summary.csv`);
   console.log(`${'='.repeat(80)}\n`);
+}
+
+async function processOverview(folder: string): Promise<void> {
+  console.log(`\n${'='.repeat(80)}`);
+  console.log(`📂 OVERVIEW - SCANNING DIRECTORY: ${folder}`);
+  console.log(`${'='.repeat(80)}`);
+
+  const items = await fs.readdir(folder, { withFileTypes: true });
+  let summaryFoundHere = false;
+  let dirCount = 0;
+
+  // If current folder has a summary.csv, compute overview and write overview.csv
+  const summaryPath = path.join(folder, 'summary.csv');
+  try {
+    await fs.access(summaryPath);
+    summaryFoundHere = true;
+  } catch {}
+
+  if (summaryFoundHere) {
+    try {
+      const content = await fs.readFile(summaryPath, 'utf8');
+      const parsed = parseCsv(content);
+      const headers = parsed.headers;
+      const rows = parsed.rows;
+
+      const idxDuration = headers.findIndex(h => h.toLowerCase() === 'duration');
+      const idxPhone = headers.findIndex(h => h.toLowerCase() === 'phone number');
+      const idxCallType = headers.findIndex(h => h.toLowerCase() === 'call type');
+
+      let total = 0;
+      let overMinute = 0;
+      let incoming = 0;
+      let outgoing = 0;
+      const uniquePhones = new Set<string>();
+
+      for (const r of rows) {
+        if (!r || r.length === 0) continue;
+        total++;
+        const phone = idxPhone >= 0 ? (r[idxPhone] || '').trim() : '';
+        if (phone) uniquePhones.add(phone);
+        const durationStr = idxDuration >= 0 ? (r[idxDuration] || '').trim() : '';
+        if (durationStr) {
+          const sec = hmsToSeconds(durationStr);
+          if (sec > 60) overMinute++;
+        }
+        const callType = (idxCallType >= 0 ? (r[idxCallType] || '') : '').toLowerCase();
+        if (callType.includes('outgoing')) outgoing++;
+        else if (callType.includes('incoming') || callType.includes('incomming')) incoming++;
+      }
+
+      const overviewHeaders = [
+        'Folder',
+        'Total Calls',
+        'Unique Phone Numbers',
+        'Calls > 1:00',
+        'Incoming',
+        'Outgoing'
+      ];
+      const csvEscape = (val: unknown): string => {
+        const s = String(val ?? '');
+        const escaped = s.replace(/"/g, '""');
+        return `"${escaped}"`;
+      };
+      let out = overviewHeaders.join(',') + '\n';
+      out += [
+        csvEscape(folder),
+        csvEscape(total),
+        csvEscape(uniquePhones.size),
+        csvEscape(overMinute),
+        csvEscape(incoming),
+        csvEscape(outgoing)
+      ].join(',') + '\n';
+
+      const overviewPath = path.join(folder, 'overview.csv');
+      await fs.writeFile(overviewPath, out, 'utf8');
+      console.log(`📊 Overview generated: ${overviewPath}`);
+    } catch (e) {
+      console.error(`❌ Failed computing overview for ${folder}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  // Recurse into subdirectories
+  for (const item of items) {
+    if (item.isDirectory()) {
+      dirCount++;
+      await processOverview(path.join(folder, item.name));
+    }
+  }
+
+  console.log(`📁 Directories scanned: ${dirCount}`);
+}
+
+function hmsToSeconds(hms: string): number {
+  const parts = hms.split(':');
+  if (parts.length === 3) {
+    const [hh, mm, ss] = parts;
+    const s = parseInt(ss || '0', 10);
+    const m = parseInt(mm || '0', 10);
+    const h = parseInt(hh || '0', 10);
+    return h * 3600 + m * 60 + s;
+  }
+  if (parts.length === 2) {
+    const [mm, ss] = parts;
+    const s = parseInt(ss || '0', 10);
+    const m = parseInt(mm || '0', 10);
+    return m * 60 + s;
+  }
+  const n = parseInt(hms, 10);
+  return isNaN(n) ? 0 : n;
+}
+
+function parseCsv(content: string): { headers: string[]; rows: string[][] } {
+  const lines = content.split(/\r?\n/).filter(l => l.length > 0);
+  if (lines.length === 0) return { headers: [], rows: [] };
+  const headers = parseCsvLine(lines[0]);
+  const rows: string[][] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const row = parseCsvLine(lines[i]);
+    if (row.length === 1 && row[0] === '') continue; // skip blank
+    rows.push(row);
+  }
+  return { headers, rows };
+}
+
+function parseCsvLine(line: string): string[] {
+  const result: string[] = [];
+  let cur = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (i + 1 < line.length && line[i + 1] === '"') {
+          cur += '"';
+          i++; // skip escaped quote
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        cur += ch;
+      }
+    } else {
+      if (ch === '"') {
+        inQuotes = true;
+      } else if (ch === ',') {
+        result.push(cur);
+        cur = '';
+      } else {
+        cur += ch;
+      }
+    }
+  }
+  result.push(cur);
+  return result;
+}
+
+async function processOverviewAtBase(baseFolder: string): Promise<void> {
+  console.log(`\n${'='.repeat(80)}`);
+  console.log(`📂 OVERVIEW - SCANNING DIRECTORY TREE: ${baseFolder}`);
+  console.log(`${'='.repeat(80)}`);
+
+  const summaryFiles: { folder: string; path: string }[] = [];
+
+  async function walk(folder: string) {
+    const items = await fs.readdir(folder, { withFileTypes: true });
+    for (const item of items) {
+      const fullPath = path.join(folder, item.name);
+      if (item.isDirectory()) {
+        const summaryPath = path.join(fullPath, 'summary.csv');
+        try {
+          await fs.access(summaryPath);
+          summaryFiles.push({ folder: fullPath, path: summaryPath });
+        } catch {}
+        await walk(fullPath);
+      }
+    }
+  }
+
+  await walk(baseFolder);
+
+  // Also ensure concatenated summary.csv exists at base by merging subfolder summaries
+  try {
+    if (summaryFiles.length > 0) {
+      const first = await fs.readFile(summaryFiles[0].path, 'utf8');
+      const { headers: aggHeaders } = parseCsv(first);
+      let aggOut = aggHeaders.join(',') + '\n';
+      for (const s of summaryFiles) {
+        const content = await fs.readFile(s.path, 'utf8');
+        const lines = content.split(/\r?\n/);
+        // skip header line for each file
+        for (let i = 1; i < lines.length; i++) {
+          const line = lines[i];
+          if (line.trim().length === 0) continue;
+          aggOut += line + '\n';
+        }
+      }
+      await fs.writeFile(path.join(baseFolder, 'summary.csv'), aggOut, 'utf8');
+      console.log(`📊 Concatenated CSV ensured at base: ${path.join(baseFolder, 'summary.csv')}`);
+    }
+  } catch (e) {
+    console.warn(`⚠️  Could not generate base concatenated summary: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
+  const rowsOut: string[][] = [];
+  let overallTotal = 0;
+  let overallOverMinute = 0;
+  let overallIncoming = 0;
+  let overallOutgoing = 0;
+  let overallTalkSeconds = 0;
+  const overallPhones = new Set<string>();
+
+  const overviewHeaders = [
+    'Folder',
+    'Total Calls',
+    'Unique Phone Numbers',
+    'Calls > 1:00',
+    'Incoming',
+    'Outgoing',
+    'Total Talk Time'
+  ];
+  const csvEscape = (val: unknown): string => {
+    const s = String(val ?? '');
+    const escaped = s.replace(/\"/g, '""');
+    return `"${escaped}"`;
+  };
+
+  for (const s of summaryFiles) {
+    try {
+      const content = await fs.readFile(s.path, 'utf8');
+      const { headers, rows } = parseCsv(content);
+      const idxDuration = headers.findIndex(h => h.toLowerCase() === 'duration');
+      const idxPhone = headers.findIndex(h => h.toLowerCase() === 'phone number');
+      const idxCallType = headers.findIndex(h => h.toLowerCase() === 'call type');
+
+      let total = 0;
+      let overMinute = 0;
+      let incoming = 0;
+      let outgoing = 0;
+      let talkSeconds = 0;
+      const phones = new Set<string>();
+
+      for (const r of rows) {
+        if (!r || r.length === 0) continue;
+        total++;
+        const phone = idxPhone >= 0 ? (r[idxPhone] || '').trim() : '';
+        if (phone) phones.add(phone);
+        const durationStr = idxDuration >= 0 ? (r[idxDuration] || '').trim() : '';
+        if (durationStr) {
+          const sec = hmsToSeconds(durationStr);
+          talkSeconds += sec;
+          if (sec > 60) overMinute++;
+        }
+        const callType = (idxCallType >= 0 ? (r[idxCallType] || '') : '').toLowerCase();
+        if (callType.includes('outgoing')) outgoing++;
+        else if (callType.includes('incoming') || callType.includes('incomming')) incoming++;
+      }
+
+      overallTotal += total;
+      overallOverMinute += overMinute;
+      overallIncoming += incoming;
+      overallOutgoing += outgoing;
+      overallTalkSeconds += talkSeconds;
+      for (const p of phones) overallPhones.add(p);
+
+      const rel = path.relative(baseFolder, s.folder) || '.';
+      rowsOut.push([
+        csvEscape(rel),
+        csvEscape(total),
+        csvEscape(phones.size),
+        csvEscape(overMinute),
+        csvEscape(incoming),
+        csvEscape(outgoing),
+        csvEscape(secondsToHms(talkSeconds))
+      ]);
+    } catch (e) {
+      console.error(`❌ Failed computing overview for ${s.folder}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  rowsOut.push([
+    csvEscape('OVERALL'),
+    csvEscape(overallTotal),
+    csvEscape(overallPhones.size),
+    csvEscape(overallOverMinute),
+    csvEscape(overallIncoming),
+    csvEscape(overallOutgoing),
+    csvEscape(secondsToHms(overallTalkSeconds))
+  ]);
+
+  let out = overviewHeaders.join(',') + '\n';
+  out += rowsOut.map(r => r.join(',')).join('\n') + (rowsOut.length ? '\n' : '');
+
+  const overviewPath = path.join(baseFolder, 'overview.csv');
+  await fs.writeFile(overviewPath, out, 'utf8');
+  console.log(`📊 Overview generated: ${overviewPath}`);
+
+  // Print a readable overview table to console
+  try {
+    printTableToConsole(overviewHeaders, rowsOut);
+  } catch {}
+}
+
+function secondsToHms(totalSeconds: number): string {
+  const sec = Math.max(0, Math.floor(totalSeconds));
+  const hh = Math.floor(sec / 3600);
+  const mm = Math.floor((sec % 3600) / 60);
+  const ss = sec % 60;
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  return `${pad(hh)}:${pad(mm)}:${pad(ss)}`;
+}
+
+function printTableToConsole(headers: string[], rows: string[][]): void {
+  // Compute column widths
+  const widths = headers.map((h, i) => {
+    const colVals = rows.map(r => (r[i] ?? '').replace(/^"|"$/g, ''));
+    return Math.max(h.length, ...colVals.map(v => v.length));
+  });
+
+  const fmtRow = (cols: string[]) =>
+    cols
+      .map((c, i) => (c.replace(/^"|"$/g, '')).padEnd(widths[i]))
+      .join('  ');
+
+  console.log('\nOverview');
+  console.log(fmtRow(headers));
+  console.log(widths.map(w => '-'.repeat(w)).join('  '));
+  for (const r of rows) {
+    console.log(fmtRow(r));
+  }
 }
 
 async function processFolderForAnalysis(folder: string, provider: AnalysisProvider, options: TranscribeOptions): Promise<void> {
