@@ -298,6 +298,9 @@ async function processFolderForSummary(folder: string, extensions: string[], agg
   let processedCount = 0;
   let dirCount = 0;
   const csvData: any[] = [];
+  const outgoingAnalyses: any[] = [];
+  const incomingAnalyses: any[] = [];
+  const deactivationAnalyses: any[] = [];
 
   for (const item of items) {
     const fullPath = path.join(folder, item.name);
@@ -384,6 +387,27 @@ async function processFolderForSummary(folder: string, extensions: string[], agg
           const agentFeedback = insights.agent_feedback || {};
           row.rapportScore = agentFeedback.rapport_score ?? '';
           row.missedOpportunity = agentFeedback.missed_opportunity ?? '';
+
+          // Classify this analysis JSON into grouped arrays for this folder
+          try {
+            const isDeactivation = Array.isArray(analysis.call_tags) && analysis.call_tags.some((t: any) => String(t?.tag ?? '').toLowerCase() === 'deactivation');
+            const analysisWithMeta = {
+              filename: item.name,
+              callType: metadata.callType,
+              timestamp: metadata.timestamp,
+              phoneNumber: metadata.phoneNumber,
+              duration: row.duration,
+              ...analysis
+            };
+            const callTypeLower = (metadata.callType || '').toLowerCase();
+            if (isDeactivation) {
+              deactivationAnalyses.push(analysisWithMeta);
+            } else if (callTypeLower.includes('outgoing')) {
+              outgoingAnalyses.push(analysisWithMeta);
+            } else if (callTypeLower.includes('incoming') || callTypeLower.includes('incomming')) {
+              incomingAnalyses.push(analysisWithMeta);
+            }
+          } catch {}
         }
 
         csvData.push(row);
@@ -398,6 +422,16 @@ async function processFolderForSummary(folder: string, extensions: string[], agg
   // Generate CSV file
   if (csvData.length > 0) {
     await generateCsvFile(folder, csvData);
+  }
+
+  // Write grouped analysis arrays in this folder
+  try {
+    await fs.writeFile(path.join(folder, 'outgoing_calls.json'), JSON.stringify(outgoingAnalyses, null, 2), 'utf8');
+    await fs.writeFile(path.join(folder, 'incoming_calls.json'), JSON.stringify(incomingAnalyses, null, 2), 'utf8');
+    await fs.writeFile(path.join(folder, 'deactivation_calls.json'), JSON.stringify(deactivationAnalyses, null, 2), 'utf8');
+    console.log('📦 Grouped JSON written (outgoing_calls.json, incoming_calls.json, deactivation_calls.json)');
+  } catch (e) {
+    console.warn(`⚠️  Failed writing grouped JSON in ${folder}`);
   }
 
   console.log(`\n${'='.repeat(80)}`);
@@ -720,6 +754,46 @@ async function processOverviewAtBase(baseFolder: string): Promise<void> {
   try {
     printTableToConsole(overviewHeaders, rowsOut);
   } catch {}
+  // Build grouped analysis JSON arrays across subfolders and write at base
+  try {
+    const outgoingAll: any[] = [];
+    const incomingAll: any[] = [];
+    const deactivationAll: any[] = [];
+
+    for (const s of summaryFiles) {
+      try {
+        const items = await fs.readdir(s.folder, { withFileTypes: true });
+        for (const it of items) {
+          if (it.isFile() && it.name.endsWith('_analysis.json')) {
+            const p = path.join(s.folder, it.name);
+            try {
+              const content = await fs.readFile(p, 'utf8');
+              const obj = JSON.parse(content);
+              const baseName = it.name.replace(/_analysis\.json$/i, '');
+              const meta = parseFilenameMetadata(baseName);
+              const isDeactivation = Array.isArray(obj.call_tags) && obj.call_tags.some((t: any) => String(t?.tag ?? '').toLowerCase() === 'deactivation');
+              const withMeta = { filename: baseName, callType: meta.callType, timestamp: meta.timestamp, phoneNumber: meta.phoneNumber, ...obj };
+              const ctLower = (meta.callType || '').toLowerCase();
+              if (isDeactivation) {
+                deactivationAll.push(withMeta);
+              } else if (ctLower.includes('outgoing')) {
+                outgoingAll.push(withMeta);
+              } else if (ctLower.includes('incoming') || ctLower.includes('incomming')) {
+                incomingAll.push(withMeta);
+              }
+            } catch {}
+          }
+        }
+      } catch {}
+    }
+
+    await fs.writeFile(path.join(baseFolder, 'outgoing_calls.json'), JSON.stringify(outgoingAll, null, 2), 'utf8');
+    await fs.writeFile(path.join(baseFolder, 'incoming_calls.json'), JSON.stringify(incomingAll, null, 2), 'utf8');
+    await fs.writeFile(path.join(baseFolder, 'deactivation_calls.json'), JSON.stringify(deactivationAll, null, 2), 'utf8');
+    console.log('📦 Grouped JSON written at base (outgoing_calls.json, incoming_calls.json, deactivation_calls.json)');
+  } catch (e) {
+    console.warn(`⚠️  Could not build grouped analysis JSON at base: ${e instanceof Error ? e.message : String(e)}`);
+  }
 }
 
 function secondsToHms(totalSeconds: number): string {
