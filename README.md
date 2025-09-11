@@ -168,6 +168,7 @@ The application generates a `summary.csv` file in each processed directory. It i
 - **Phone Number**: Parsed from TP3 token in filename
 - **Call Type**: Parsed from TP4 token in filename (e.g., "outgoing", "incoming")
 - **Sentiment, Confidence, Payment Intent, Next Best Action, To-Do**: From analysis JSON
+- **Call Tags**: Pipe-separated tags from analysis (e.g., `introduction | virtual_meet_scheduling`)
 - **Call Tags Count, Concerns Count**: Counts from analysis arrays
 - **Advanced Insights**: Emotional State, Conversion Probability, Urgency Level, Rapport Score, Missed Opportunity
 

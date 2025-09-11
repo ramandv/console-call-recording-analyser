@@ -304,7 +304,13 @@ async function processFolderForSummary(folder: string, extensions: string[]): Pr
           row.paymentIntent = analysis.payment_intent ?? '';
           row.nextBestAction = analysis.next_best_action ?? '';
           row.todo = Array.isArray(analysis.todo) ? analysis.todo.join(' | ') : '';
-          row.callTagsCount = Array.isArray(analysis.call_tags) ? analysis.call_tags.length : '';
+          if (Array.isArray(analysis.call_tags)) {
+            row.callTagsCount = analysis.call_tags.length;
+            row.callTags = analysis.call_tags.map((t: any) => t?.tag).filter(Boolean).join(' | ');
+          } else {
+            row.callTagsCount = '';
+            row.callTags = '';
+          }
           row.concernsCount = Array.isArray(analysis.concerns) ? analysis.concerns.length : '';
 
           const insights = analysis.advanced_insights || {};
@@ -474,6 +480,7 @@ async function generateCsvFile(folder: string, csvData: any[]): Promise<void> {
       'Payment Intent',
       'Next Best Action',
       'To-Do',
+      'Call Tags',
       'Call Tags Count',
       'Concerns Count',
       'Emotional State',
@@ -506,6 +513,7 @@ async function generateCsvFile(folder: string, csvData: any[]): Promise<void> {
         csvEscape(row.paymentIntent),
         csvEscape(row.nextBestAction),
         csvEscape(row.todo),
+        csvEscape(row.callTags),
         csvEscape(row.callTagsCount),
         csvEscape(row.concernsCount),
         csvEscape(row.emotionalState),
