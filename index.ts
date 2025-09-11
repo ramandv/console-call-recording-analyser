@@ -27,6 +27,7 @@ interface TranscribeOptions {
   service?: string;
   analysisService?: string;
   analysisMaxMb?: number | string;
+  analysisMinSeconds?: number | string;
 }
 
 const program = new Command();
@@ -44,6 +45,7 @@ program
   .option('-S, --service <service>', 'Transcription service to use: whisper, google, speechmatics, or gemini', 'whisper')
   .option('-A, --analysis-service <service>', 'Analysis service to use: gemini', 'gemini')
   .option('-M, --analysis-max-mb <mb>', 'Maximum file size (MB) for analysis', '2')
+  .option('-N, --analysis-min-seconds <seconds>', 'Minimum duration (seconds) for analysis', '60')
   .action(async (folder: string, options: TranscribeOptions) => {
     try {
       await main(folder, options);
@@ -99,6 +101,9 @@ async function main(folder: string, options: TranscribeOptions): Promise<void> {
       const cfgMb = parseFloat(String(options.analysisMaxMb ?? process.env.ANALYSIS_MAX_MB ?? '2'));
       const effectiveMb = isNaN(cfgMb) || cfgMb <= 0 ? 2 : cfgMb;
       console.log(`📏 Max analysis file size: ${effectiveMb} MB`);
+      const cfgMinSec = parseFloat(String(options.analysisMinSeconds ?? process.env.ANALYSIS_MIN_SECONDS ?? '60'));
+      const effectiveMinSec = isNaN(cfgMinSec) || cfgMinSec < 0 ? 60 : Math.floor(cfgMinSec);
+      console.log(`⏱️  Min analysis duration: ${effectiveMinSec} seconds`);
     } else {
       throw new Error(`Unsupported analysis service: ${analysisService}. Use 'gemini'`);
     }
@@ -400,6 +405,26 @@ async function processFolderForAnalysis(folder: string, provider: AnalysisProvid
           }
         } catch (e) {
           console.warn('⚠️  Could not determine file size; proceeding with analysis');
+        }
+
+        // Enforce minimum duration for analysis (default 60s, configurable)
+        try {
+          const cfgMinSec = parseFloat(String(options.analysisMinSeconds ?? process.env.ANALYSIS_MIN_SECONDS ?? '60'));
+          const effectiveMinSec = isNaN(cfgMinSec) || cfgMinSec < 0 ? 60 : Math.floor(cfgMinSec);
+          const durationStr = await getAudioDuration(fullPath);
+          if (durationStr) {
+            const [hh, mm, ss] = durationStr.split(':');
+            const seconds = (parseInt(hh || '0') * 3600) + (parseInt(mm || '0') * 60) + parseInt(ss || '0');
+            if (seconds < effectiveMinSec) {
+              console.log(`⏭️  SKIPPING: Duration ${durationStr} is under ${effectiveMinSec} seconds`);
+              skippedCount++;
+              continue;
+            }
+          } else {
+            console.warn('⚠️  Duration unknown; proceeding with analysis');
+          }
+        } catch (e) {
+          console.warn('⚠️  Could not determine duration; proceeding with analysis');
         }
 
         const jsonPath = path.join(folder, path.basename(item.name, ext) + '_analysis.json');

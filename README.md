@@ -390,3 +390,17 @@ npm start -- --analyse-only --analysis-max-mb 1.5 input
 # Using env var (overrides default)
 ANALYSIS_MAX_MB=4 npm start -- --analyse-only input
 ```
+
+##### Minimum Duration
+- Default minimum duration for analysis: 60 seconds
+- Change via CLI: `--analysis-min-seconds <number>`
+- Or set env var: `ANALYSIS_MIN_SECONDS=<number>`
+
+Examples:
+```bash
+# Skip files shorter than 90 seconds
+npm start -- --analyse-only --analysis-min-seconds 90 input
+
+# Using env var (overrides default)
+ANALYSIS_MIN_SECONDS=30 npm start -- --analyse-only input
+```
