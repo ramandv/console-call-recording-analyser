@@ -179,10 +179,10 @@ The application generates a `summary.csv` file in each processed directory. It i
 - **Timestamp**: Parsed from TP1 token in filename (YYYY-MM-DD HH:MM:SS)
 - **Phone Number**: Parsed from TP3 token in filename
 - **Call Type**: Parsed from TP4 token in filename (e.g., "outgoing", "incoming")
-- **Sentiment, Confidence, Payment Intent, Next Best Action, To-Do**: From analysis JSON
-- **Call Tags**: Pipe-separated tags from analysis (e.g., `introduction | virtual_meet_scheduling`)
+- **Sentiment, Confidence, Emotional State, Rapport Score**: Key analysis signals
+- **Call Tags**: Pipe-separated tags from analysis (unique, e.g., `introduction | virtual_meet_scheduling`)
 - **Call Tags Count, Concerns Count**: Counts from analysis arrays
-- **Advanced Insights**: Emotional State, Conversion Probability, Urgency Level, Rapport Score, Missed Opportunity
+- **Other Analysis Fields**: Payment Intent, Next Best Action, To-Do, Conversion Probability, Urgency Level, Missed Opportunity
 
 Example CSV output (columns abbreviated for brevity):
 ```csv
@@ -199,6 +199,7 @@ Running with `--overview-only` or via the default run creates a single `overview
 - Unique Phone Numbers: Distinct non-empty “Phone Number” values
 - Calls > 1:00: Number of rows with Duration > 60 seconds
 - Incoming / Outgoing: Call type counts (handles “incoming”/“incomming”)
+- Unique Outgoing >1:00: Distinct phone numbers for outgoing calls with Duration > 60 seconds
 - Total Talk Time: Sum of durations in `HH:MM:SS`
 
 ## Analysis Output

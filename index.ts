@@ -357,8 +357,20 @@ async function processFolderForSummary(folder: string, extensions: string[], agg
           row.nextBestAction = analysis.next_best_action ?? '';
           row.todo = Array.isArray(analysis.todo) ? analysis.todo.join(' | ') : '';
           if (Array.isArray(analysis.call_tags)) {
-            row.callTagsCount = analysis.call_tags.length;
-            row.callTags = analysis.call_tags.map((t: any) => t?.tag).filter(Boolean).join(' | ');
+            const tagNames: string[] = analysis.call_tags
+              .map((t: any) => (t?.tag ?? '').toString().trim())
+              .filter((v: string) => v.length > 0);
+            const seen = new Set<string>();
+            const uniqueTags: string[] = [];
+            for (const name of tagNames) {
+              const key = name.toLowerCase();
+              if (!seen.has(key)) {
+                seen.add(key);
+                uniqueTags.push(name);
+              }
+            }
+            row.callTagsCount = uniqueTags.length;
+            row.callTags = uniqueTags.join(' | ');
           } else {
             row.callTagsCount = '';
             row.callTags = '';
@@ -612,6 +624,7 @@ async function processOverviewAtBase(baseFolder: string): Promise<void> {
     'Calls > 1:00',
     'Incoming',
     'Outgoing',
+    'Unique Outgoing >1:00',
     'Total Talk Time'
   ];
   const csvEscape = (val: unknown): string => {
@@ -619,6 +632,9 @@ async function processOverviewAtBase(baseFolder: string): Promise<void> {
     const escaped = s.replace(/\"/g, '""');
     return `"${escaped}"`;
   };
+
+  // Track overall unique outgoing >1:00 across all folders
+  const overallOutgoingLongPhones = new Set<string>();
 
   for (const s of summaryFiles) {
     try {
@@ -634,6 +650,7 @@ async function processOverviewAtBase(baseFolder: string): Promise<void> {
       let outgoing = 0;
       let talkSeconds = 0;
       const phones = new Set<string>();
+      const outgoingLongPhones = new Set<string>();
 
       for (const r of rows) {
         if (!r || r.length === 0) continue;
@@ -647,7 +664,13 @@ async function processOverviewAtBase(baseFolder: string): Promise<void> {
           if (sec > 60) overMinute++;
         }
         const callType = (idxCallType >= 0 ? (r[idxCallType] || '') : '').toLowerCase();
-        if (callType.includes('outgoing')) outgoing++;
+        if (callType.includes('outgoing')) {
+          outgoing++;
+          if (durationStr) {
+            const sec = hmsToSeconds(durationStr);
+            if (sec > 60 && phone) outgoingLongPhones.add(phone);
+          }
+        }
         else if (callType.includes('incoming') || callType.includes('incomming')) incoming++;
       }
 
@@ -657,6 +680,7 @@ async function processOverviewAtBase(baseFolder: string): Promise<void> {
       overallOutgoing += outgoing;
       overallTalkSeconds += talkSeconds;
       for (const p of phones) overallPhones.add(p);
+      for (const p of outgoingLongPhones) overallOutgoingLongPhones.add(p);
 
       const rel = path.relative(baseFolder, s.folder) || '.';
       rowsOut.push([
@@ -666,6 +690,7 @@ async function processOverviewAtBase(baseFolder: string): Promise<void> {
         csvEscape(overMinute),
         csvEscape(incoming),
         csvEscape(outgoing),
+        csvEscape(outgoingLongPhones.size),
         csvEscape(secondsToHms(talkSeconds))
       ]);
     } catch (e) {
@@ -680,6 +705,7 @@ async function processOverviewAtBase(baseFolder: string): Promise<void> {
     csvEscape(overallOverMinute),
     csvEscape(overallIncoming),
     csvEscape(overallOutgoing),
+    csvEscape(overallOutgoingLongPhones.size),
     csvEscape(secondsToHms(overallTalkSeconds))
   ]);
 
@@ -894,16 +920,16 @@ async function generateCsvFile(folder: string, csvData: any[]): Promise<void> {
       'Call Type',
       'Sentiment',
       'Confidence',
+      'Emotional State',
+      'Rapport Score',
+      'Call Tags',
+      'Call Tags Count',
       'Payment Intent',
       'Next Best Action',
       'To-Do',
-      'Call Tags',
-      'Call Tags Count',
       'Concerns Count',
-      'Emotional State',
       'Conversion Probability',
       'Urgency Level',
-      'Rapport Score',
       'Missed Opportunity'
     ];
 
@@ -927,16 +953,16 @@ async function generateCsvFile(folder: string, csvData: any[]): Promise<void> {
         csvEscape(row.callType),
         csvEscape(row.sentiment),
         csvEscape(row.confidence),
+        csvEscape(row.emotionalState),
+        csvEscape(row.rapportScore),
+        csvEscape(row.callTags),
+        csvEscape(row.callTagsCount),
         csvEscape(row.paymentIntent),
         csvEscape(row.nextBestAction),
         csvEscape(row.todo),
-        csvEscape(row.callTags),
-        csvEscape(row.callTagsCount),
         csvEscape(row.concernsCount),
-        csvEscape(row.emotionalState),
         csvEscape(row.conversionProbability),
         csvEscape(row.urgencyLevel),
-        csvEscape(row.rapportScore),
         csvEscape(row.missedOpportunity)
       ];
       csvContent += values.join(',') + '\n';
