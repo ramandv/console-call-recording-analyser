@@ -26,6 +26,7 @@ interface TranscribeOptions {
   analyseOnly?: boolean;
   service?: string;
   analysisService?: string;
+  analysisMaxMb?: number | string;
 }
 
 const program = new Command();
@@ -42,6 +43,7 @@ program
   .option('-a, --analyse-only', 'Only perform analysis on audio files')
   .option('-S, --service <service>', 'Transcription service to use: whisper, google, speechmatics, or gemini', 'whisper')
   .option('-A, --analysis-service <service>', 'Analysis service to use: gemini', 'gemini')
+  .option('-M, --analysis-max-mb <mb>', 'Maximum file size (MB) for analysis', '2')
   .action(async (folder: string, options: TranscribeOptions) => {
     try {
       await main(folder, options);
@@ -94,6 +96,9 @@ async function main(folder: string, options: TranscribeOptions): Promise<void> {
     console.log(`🔍 Analysis service: ${analysisService}`);
     if (analysisService === 'gemini') {
       console.log('💎 Gemini analysis service selected');
+      const cfgMb = parseFloat(String(options.analysisMaxMb ?? process.env.ANALYSIS_MAX_MB ?? '2'));
+      const effectiveMb = isNaN(cfgMb) || cfgMb <= 0 ? 2 : cfgMb;
+      console.log(`📏 Max analysis file size: ${effectiveMb} MB`);
     } else {
       throw new Error(`Unsupported analysis service: ${analysisService}. Use 'gemini'`);
     }
@@ -164,7 +169,19 @@ async function processTranscription(folder: string, options: TranscribeOptions, 
 }
 
 async function processSummary(folder: string, extensions: string[]): Promise<void> {
-  await processFolderForSummary(folder, extensions);
+  // Collect rows across all subfolders and write a concatenated CSV
+  // into the same folder the user invoked (e.g., input/summary.csv).
+  const aggregate: any[] = [];
+  await processFolderForSummary(folder, extensions, aggregate);
+
+  try {
+    if (aggregate.length > 0) {
+      await generateCsvFile(folder, aggregate);
+      console.log(`📊 Concatenated CSV generated: ${path.join(folder, 'summary.csv')}`);
+    }
+  } catch (error) {
+    console.error(`❌ Failed to generate concatenated CSV: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 async function processAnalysis(folder: string, options: TranscribeOptions): Promise<void> {
@@ -235,7 +252,7 @@ async function processFolderForTranscription(folder: string, provider: Transcrip
   console.log(`${'='.repeat(80)}\n`);
 }
 
-async function processFolderForSummary(folder: string, extensions: string[]): Promise<void> {
+async function processFolderForSummary(folder: string, extensions: string[], aggregate?: any[]): Promise<void> {
   console.log(`\n${'='.repeat(80)}`);
   console.log(`📂 SUMMARY - SCANNING DIRECTORY: ${folder}`);
   console.log(`${'='.repeat(80)}`);
@@ -253,7 +270,7 @@ async function processFolderForSummary(folder: string, extensions: string[]): Pr
     if (item.isDirectory()) {
       console.log(`📁 Entering subdirectory: ${fullPath}`);
       dirCount++;
-      await processFolderForSummary(fullPath, extensions);
+      await processFolderForSummary(fullPath, extensions, aggregate);
     } else if (item.isFile()) {
       const ext = path.extname(item.name).toLowerCase();
       if (extensions.includes(ext)) {
@@ -323,6 +340,7 @@ async function processFolderForSummary(folder: string, extensions: string[]): Pr
         }
 
         csvData.push(row);
+        if (aggregate) aggregate.push(row);
         processedCount++;
       } else {
         console.log(`❌ SKIPPING: ${item.name} (unsupported format: ${ext})`);
@@ -368,6 +386,21 @@ async function processFolderForAnalysis(folder: string, provider: AnalysisProvid
         console.log(`\n${'-'.repeat(60)}`);
         console.log(`🔍 ANALYZING FILE: ${item.name}`);
         console.log(`${'-'.repeat(60)}`);
+
+        // Enforce max file size for analysis (default 2 MB, configurable)
+        try {
+          const cfgMb = parseFloat(String(options.analysisMaxMb ?? process.env.ANALYSIS_MAX_MB ?? '2'));
+          const effectiveMb = isNaN(cfgMb) || cfgMb <= 0 ? 2 : cfgMb;
+          const maxBytes = Math.floor(effectiveMb * 1024 * 1024);
+          const stat = await fs.stat(fullPath);
+          if (stat.size > maxBytes) {
+            console.log(`⏭️  SKIPPING: File size ${(stat.size / (1024 * 1024)).toFixed(2)} MB exceeds analysis limit of ${effectiveMb} MB`);
+            skippedCount++;
+            continue;
+          }
+        } catch (e) {
+          console.warn('⚠️  Could not determine file size; proceeding with analysis');
+        }
 
         const jsonPath = path.join(folder, path.basename(item.name, ext) + '_analysis.json');
         try {

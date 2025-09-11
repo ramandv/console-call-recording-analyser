@@ -377,3 +377,16 @@ package.json                  # Project dependencies and scripts
 - **OpenAI** - Whisper API for high-quality audio transcription
 - **commander** - Command-line interface parsing
 - **Node.js fs promises** - Asynchronous file operations
+##### File Size Limit
+- Default max file size for analysis: 2 MB
+- Change via CLI: `--analysis-max-mb <number>`
+- Or set env var: `ANALYSIS_MAX_MB=<number>`
+
+Examples:
+```bash
+# Limit analysis to 1.5 MB
+npm start -- --analyse-only --analysis-max-mb 1.5 input
+
+# Using env var (overrides default)
+ANALYSIS_MAX_MB=4 npm start -- --analyse-only input
+```
