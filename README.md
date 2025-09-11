@@ -68,29 +68,53 @@ npm start /path/to/folder -- --service google --transcribe-only
 
 #### Transcription Only
 ```bash
-# Transcribe files without generating CSV
+# Using npm start (requires -- to pass flags to the script)
 npm start -- --transcribe-only
+npm start -- -t
+
+# Direct execution (no -- needed)
+node dist/index.js --transcribe-only
+node dist/index.js -t
 
 # With custom folder
 npm start /path/to/folder -- --transcribe-only
+npm start /path/to/folder -- -t
+node dist/index.js /path/to/folder --transcribe-only
+node dist/index.js /path/to/folder -t
 ```
 
 #### Summary Generation Only
 ```bash
-# Generate CSV from existing transcriptions
+# Using npm start (requires -- to pass flags to the script)
 npm start -- --summary-only
+npm start -- -s
+
+# Direct execution (no -- needed)
+node dist/index.js --summary-only
+node dist/index.js -s
 
 # With custom folder
 npm start /path/to/folder -- --summary-only
+npm start /path/to/folder -- -s
+node dist/index.js /path/to/folder --summary-only
+node dist/index.js /path/to/folder -s
 ```
 
 #### Analysis Only
 ```bash
-# Analyze audio files directly without transcription or CSV generation
+# Using npm start (requires -- to pass flags to the script)
 npm start -- --analyse-only
+npm start -- -a
+
+# Direct execution (no -- needed)
+node dist/index.js --analyse-only
+node dist/index.js -a
 
 # With custom folder
 npm start /path/to/folder -- --analyse-only
+npm start /path/to/folder -- -a
+node dist/index.js /path/to/folder --analyse-only
+node dist/index.js /path/to/folder -a
 ```
 
 ## Gemini Transcription Output Format
