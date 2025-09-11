@@ -30,7 +30,9 @@ npm run build
 
 ## Usage
 
-### Full Process (Transcription + CSV Generation)
+### Default Run (Analysis → Summary → Overview)
+Runs analysis, generates per-folder `summary.csv` and a concatenated `summary.csv` at the base, then creates `overview.csv` at the base and prints a readable table.
+
 ```bash
 # Basic usage with default folder (./input)
 npm start
@@ -41,15 +43,8 @@ node dist/index.js
 # Specify custom folder
 npm start /path/to/folder
 
-# Use OpenAI API key
-npm start -- --api-key your-openai-api-key
-
-# Set environment variable
-export OPENAI_API_KEY=your-openai-api-key
-npm start
-
-# Combine options
-npm start /custom/folder -- --api-key your-openai-api-key
+# Combine with analysis config
+npm start /path/to/folder -- --analysis-max-mb 2 --analysis-min-seconds 60
 ```
 
 ### Choose Transcription Service
@@ -117,6 +112,23 @@ node dist/index.js /path/to/folder --analyse-only
 node dist/index.js /path/to/folder -a
 ```
 
+#### Overview Only
+Computes per-subfolder metrics from `summary.csv` files and writes a single `overview.csv` at the base folder. Also prints the overview as a readable table.
+
+```bash
+# Using npm start
+npm start -- --overview-only
+npm start -- -o
+
+# Direct execution
+node dist/index.js --overview-only
+node dist/index.js -o
+
+# With custom folder
+npm start /path/to/folder -- --overview-only
+node dist/index.js /path/to/folder --overview-only
+```
+
 ## Gemini Transcription Output Format
 
 When using the Gemini service (`--service gemini`), each transcription file includes both a summary and the full transcription text in a structured format. Gemini uses a single-prompt approach that generates both the transcription and summary in one API call.
@@ -158,7 +170,7 @@ When using Whisper, Google, or Speechmatics services, only the transcription is 
 
 ## CSV Output
 
-The application generates a `summary.csv` file in each processed directory. It includes file metadata and, when available, key fields from the per-file analysis JSON (`*_analysis.json`).
+The application generates a `summary.csv` file in each processed directory. It includes file metadata and, when available, key fields from the per-file analysis JSON (`*_analysis.json`). The base folder also gets a concatenated `summary.csv` containing all rows from subfolders.
 
 - **Filename**: Original audio file name
 - **Duration**: Audio duration in HH:MM:SS format
@@ -177,6 +189,17 @@ Example CSV output (columns abbreviated for brevity):
 Filename,Duration,Has Transcription,Has Analysis,Timestamp,Phone Number,Call Type,Sentiment,Confidence,Payment Intent,Next Best Action
 "recording-TP11755659148284TP2TP37561074523TP4outgoing.amr","00:00:20","Yes","Yes","2025-08-20 03:05:48","7561074523","outgoing","neutral","0.80","not_discussed","Share 2 high-fit profiles..."
 ```
+
+## Overview Output
+
+Running with `--overview-only` or via the default run creates a single `overview.csv` in the base folder with one row per subfolder (that has a `summary.csv`) and a final OVERALL row. The same data is also printed as a readable table in the console.
+
+- Folder: Relative subfolder under the base
+- Total Calls: Count of rows in that subfolder’s `summary.csv`
+- Unique Phone Numbers: Distinct non-empty “Phone Number” values
+- Calls > 1:00: Number of rows with Duration > 60 seconds
+- Incoming / Outgoing: Call type counts (handles “incoming”/“incomming”)
+- Total Talk Time: Sum of durations in `HH:MM:SS`
 
 ## Analysis Output
 

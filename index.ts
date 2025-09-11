@@ -71,7 +71,8 @@ async function main(folder: string, options: TranscribeOptions): Promise<void> {
   } else if (overviewOnly) {
     mode = 'overview';
   } else {
-    mode = 'both';
+    // Default behavior: analysis + summary + overview (no transcription by default)
+    mode = 'default';
   }
 
   console.log(`🚀 Starting ${mode} process...`);
@@ -98,7 +99,7 @@ async function main(folder: string, options: TranscribeOptions): Promise<void> {
     }
   }
 
-  if (mode === 'analyse' || mode === 'both') {
+  if (mode === 'analyse' || mode === 'both' || mode === 'default') {
     console.log(`🔍 Analysis service: ${analysisService}`);
     if (analysisService === 'gemini') {
       console.log('💎 Gemini analysis service selected');
@@ -134,6 +135,23 @@ async function main(folder: string, options: TranscribeOptions): Promise<void> {
   const supportedExtensions = ['.mp3', '.wav', '.mp4', '.m4a', '.flac', '.ogg', '.amr'];
 
   // Execute based on mode
+  if (mode === 'default') {
+    // Default pipeline: analyse -> summary -> overview
+    console.log('🔄 Starting analysis process...');
+    await processAnalysis(folder, options);
+    console.log('✅ Analysis completed');
+
+    console.log('🔄 Starting summary generation...');
+    await processSummary(folder, supportedExtensions);
+    console.log('✅ Summary generation completed');
+
+    console.log('🔄 Starting overview generation...');
+    await processOverviewAtBase(folder);
+    console.log('✅ Overview generation completed');
+
+    console.log(`✅ Default process completed successfully`);
+    return;
+  }
   if (mode === 'transcribe' || mode === 'both') {
     console.log(`🎵 Supported file extensions: ${supportedExtensions.join(', ')}`);
     console.log('🔄 Starting transcription process...');
