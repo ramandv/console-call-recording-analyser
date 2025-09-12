@@ -354,6 +354,7 @@ async function processFolderForSummary(folder: string, extensions: string[], agg
 
         if (analysis) {
           // Map selected analysis fields into flat CSV-friendly values
+          row.gender = analysis.gender ?? '';
           row.sentiment = analysis.sentiment ?? '';
           row.confidence = analysis.confidence ?? '';
           row.paymentIntent = analysis.payment_intent ?? '';
@@ -1041,6 +1042,7 @@ async function generateCsvFile(folder: string, csvData: any[]): Promise<void> {
       'Timestamp',
       'Phone Number',
       'Call Type',
+      'Gender',
       'Sentiment',
       'Confidence',
       'Emotional State',
@@ -1074,6 +1076,7 @@ async function generateCsvFile(folder: string, csvData: any[]): Promise<void> {
         csvEscape(row.timestamp),
         csvEscape(row.phoneNumber),
         csvEscape(row.callType),
+        csvEscape(row.gender),
         csvEscape(row.sentiment),
         csvEscape(row.confidence),
         csvEscape(row.emotionalState),

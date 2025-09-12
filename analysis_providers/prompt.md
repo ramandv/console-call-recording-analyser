@@ -12,6 +12,7 @@ Classify sentiment, tag call topics, capture user concerns, and recommend follow
 
 ```
 {
+  "gender": "male | female | unknown",
   "sentiment": "positive | neutral | negative",
   "confidence": 0.0,
   "call_tags": [
@@ -43,6 +44,8 @@ Classify sentiment, tag call topics, capture user concerns, and recommend follow
 ```
 
 ### Field Guidance
+
+- **gender** (user voice): infer the caller's gender when clear from voice cues or explicit statements; use `unknown` if ambiguous.
 
 - **sentiment** (user-focused):
     

@@ -179,6 +179,7 @@ The application generates a `summary.csv` file in each processed directory. It i
 - **Timestamp**: Parsed from TP1 token in filename (YYYY-MM-DD HH:MM:SS)
 - **Phone Number**: Parsed from TP3 token in filename
 - **Call Type**: Parsed from TP4 token in filename (e.g., "outgoing", "incoming")
+- **Gender**: From analysis JSON (`male`, `female`, or `unknown`)
 - **Sentiment, Confidence, Emotional State, Rapport Score**: Key analysis signals
 - **Call Tags**: Pipe-separated tags from analysis (unique, e.g., `introduction | virtual_meet_scheduling`)
 - **Call Tags Count, Concerns Count**: Counts from analysis arrays
@@ -186,8 +187,8 @@ The application generates a `summary.csv` file in each processed directory. It i
 
 Example CSV output (columns abbreviated for brevity):
 ```csv
-Filename,Duration,Has Transcription,Has Analysis,Timestamp,Phone Number,Call Type,Sentiment,Confidence,Payment Intent,Next Best Action
-"recording-TP11755659148284TP2TP37561074523TP4outgoing.amr","00:00:20","Yes","Yes","2025-08-20 03:05:48","7561074523","outgoing","neutral","0.80","not_discussed","Share 2 high-fit profiles..."
+Filename,Duration,Has Transcription,Has Analysis,Timestamp,Phone Number,Call Type,Gender,Sentiment,Confidence,Emotional State,Rapport Score,Call Tags,Call Tags Count,Payment Intent,Next Best Action
+"recording-TP11755659148284TP2TP37561074523TP4outgoing.amr","00:00:20","Yes","Yes","2025-08-20 03:05:48","7561074523","outgoing","female","neutral","0.80","guarded","0.8","introduction | virtual_meet_scheduling","2","not_discussed","Share 2 high-fit profiles..."
 ```
 
 ## Overview Output
