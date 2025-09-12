@@ -650,6 +650,7 @@ async function processOverviewAtBase(baseFolder: string): Promise<void> {
   let overallOutgoing = 0;
   let overallTalkSeconds = 0;
   const overallPhones = new Set<string>();
+  const hourBuckets: { totalSeconds: number; calls: number }[] = Array.from({ length: 24 }, () => ({ totalSeconds: 0, calls: 0 }));
 
   const overviewHeaders = [
     'Folder',
@@ -677,6 +678,7 @@ async function processOverviewAtBase(baseFolder: string): Promise<void> {
       const idxDuration = headers.findIndex(h => h.toLowerCase() === 'duration');
       const idxPhone = headers.findIndex(h => h.toLowerCase() === 'phone number');
       const idxCallType = headers.findIndex(h => h.toLowerCase() === 'call type');
+      const idxTimestamp = headers.findIndex(h => h.toLowerCase() === 'timestamp');
 
       let total = 0;
       let overMinute = 0;
@@ -706,6 +708,18 @@ async function processOverviewAtBase(baseFolder: string): Promise<void> {
           }
         }
         else if (callType.includes('incoming') || callType.includes('incomming')) incoming++;
+
+        // Hourly aggregation
+        try {
+          if (idxTimestamp >= 0 && durationStr) {
+            const ts = (r[idxTimestamp] || '').trim();
+            const hour = extractHour(ts);
+            if (hour !== null) {
+              hourBuckets[hour].totalSeconds += hmsToSeconds(durationStr);
+              hourBuckets[hour].calls += 1;
+            }
+          }
+        } catch {}
       }
 
       overallTotal += total;
@@ -754,6 +768,27 @@ async function processOverviewAtBase(baseFolder: string): Promise<void> {
   try {
     printTableToConsole(overviewHeaders, rowsOut);
   } catch {}
+  // Write and print hourly overview
+  try {
+    const hourHeaders = ['Hour', 'Total Minutes', 'Calls'];
+    const hourRows: string[][] = [];
+    for (let h = 0; h < 24; h++) {
+      const label = `${String(h).padStart(2, '0')}:00-${String((h + 1) % 24).padStart(2, '0')}:00`;
+      const minutes = (hourBuckets[h].totalSeconds / 60).toFixed(2);
+      hourRows.push([
+        `"${label}"`,
+        `"${minutes}"`,
+        `"${hourBuckets[h].calls}"`
+      ]);
+    }
+    const hourPath = path.join(baseFolder, 'overview-by-hour.csv');
+    let hourCsv = hourHeaders.join(',') + '\n' + hourRows.map(r => r.join(',')).join('\n') + '\n';
+    await fs.writeFile(hourPath, hourCsv, 'utf8');
+    console.log(`📊 Hourly overview generated: ${hourPath}`);
+    printTableToConsole(hourHeaders, hourRows);
+  } catch (e) {
+    console.warn(`⚠️  Could not generate hourly overview: ${e instanceof Error ? e.message : String(e)}`);
+  }
   // Build grouped analysis JSON arrays across subfolders and write at base
   try {
     const outgoingAll: any[] = [];
@@ -822,6 +857,20 @@ function printTableToConsole(headers: string[], rows: string[][]): void {
   console.log(widths.map(w => '-'.repeat(w)).join('  '));
   for (const r of rows) {
     console.log(fmtRow(r));
+  }
+}
+
+function extractHour(ts: string): number | null {
+  // Timestamp format expected: YYYY-MM-DD HH:MM:SS (UTC-based from toISOString())
+  // Safely parse hour component
+  try {
+    if (!ts || ts.length < 13) return null;
+    const hourStr = ts.substring(11, 13);
+    const hr = parseInt(hourStr, 10);
+    if (isNaN(hr) || hr < 0 || hr > 23) return null;
+    return hr;
+  } catch {
+    return null;
   }
 }
 
