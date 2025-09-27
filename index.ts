@@ -990,6 +990,18 @@ function parseFilenameMetadata(filename: string): { timestamp: string; phoneNumb
   let callType = 'N/A';
 
   try {
+    const baseName = filename.replace(/\.[^.]+$/, '');
+
+    // Handle new "<phone> YYYY-MM-DD HH-MM-SS" pattern
+    const simplePattern = baseName.match(/^([+]?[\d\s-]+?)\s+(\d{4}-\d{2}-\d{2})\s+(\d{2})-(\d{2})-(\d{2})$/);
+    if (simplePattern) {
+      const rawPhone = simplePattern[1].replace(/[^+\d]/g, '');
+      const normalizedPhone = rawPhone.startsWith('+') ? rawPhone.slice(1) : rawPhone;
+      phoneNumber = normalizedPhone || 'N/A';
+      timestamp = `${simplePattern[2]} ${simplePattern[3]}:${simplePattern[4]}:${simplePattern[5]}`;
+      return { timestamp, phoneNumber, callType };
+    }
+
     // Extract TP tokens from filename
     const tp1Match = filename.match(/TP1(\d+)/);
     const tp3Match = filename.match(/TP3([+\d]+)/);
@@ -1017,9 +1029,9 @@ function parseFilenameMetadata(filename: string): { timestamp: string; phoneNumb
       const afterTP4 = filename.substring(filename.indexOf('TP4') + 3);
       const nextTPMatch = afterTP4.match(/TP\d/);
       if (nextTPMatch) {
-        callType = afterTP4.substring(0, nextTPMatch.index);
+        callType = afterTP4.substring(0, nextTPMatch.index).trim();
       } else {
-        callType = afterTP4;
+        callType = afterTP4.trim();
       }
     }
   } catch (error) {
