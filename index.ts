@@ -14,9 +14,13 @@ import { WhisperProvider } from './transcript_providers/whisper-provider';
 import { AudioConverter } from './audio_utils/audio-converter';
 import { AnalysisProvider } from './analysis_providers/base-analysis';
 import { GeminiAnalysisProvider } from './analysis_providers/gemini-analysis';
+import { FilenameParserFactory } from './filename_parsers/filename-parser-factory';
 
 // Load environment variables from .env file
 config();
+
+// Create global filename parser factory instance
+const filenameParserFactory = new FilenameParserFactory();
 
 interface TranscribeOptions {
   model?: string;
@@ -328,7 +332,7 @@ async function processFolderForSummary(folder: string, extensions: string[], agg
         }
 
         // Add to CSV regardless of transcription status
-        const metadata = parseFilenameMetadata(item.name);
+        const metadata = filenameParserFactory.parseFilenameMetadata(item.name);
         const duration = await getAudioDuration(fullPath);
 
         // Try to read analysis JSON if present
@@ -806,7 +810,7 @@ async function processOverviewAtBase(baseFolder: string): Promise<void> {
               const content = await fs.readFile(p, 'utf8');
               const obj = JSON.parse(content);
               const baseName = it.name.replace(/_analysis\.json$/i, '');
-              const meta = parseFilenameMetadata(baseName);
+              const meta = filenameParserFactory.parseFilenameMetadata(baseName);
               const isDeactivation = Array.isArray(obj.call_tags) && obj.call_tags.some((t: any) => String(t?.tag ?? '').toLowerCase() === 'deactivation');
               const withMeta = { filename: baseName, callType: meta.callType, timestamp: meta.timestamp, phoneNumber: meta.phoneNumber, ...obj };
               const ctLower = (meta.callType || '').toLowerCase();
@@ -983,63 +987,6 @@ async function getAudioDuration(filePath: string): Promise<string | null> {
   }
 }
 
-function parseFilenameMetadata(filename: string): { timestamp: string; phoneNumber: string; callType: string } {
-  // Default values
-  let timestamp = 'N/A';
-  let phoneNumber = 'N/A';
-  let callType = 'N/A';
-
-  try {
-    const baseName = filename.replace(/\.[^.]+$/, '');
-
-    // Handle new "<phone> YYYY-MM-DD HH-MM-SS" pattern
-    const simplePattern = baseName.match(/^([+]?[\d\s-]+?)\s+(\d{4}-\d{2}-\d{2})\s+(\d{2})-(\d{2})-(\d{2})$/);
-    if (simplePattern) {
-      const rawPhone = simplePattern[1].replace(/[^+\d]/g, '');
-      const normalizedPhone = rawPhone.startsWith('+') ? rawPhone.slice(1) : rawPhone;
-      phoneNumber = normalizedPhone || 'N/A';
-      timestamp = `${simplePattern[2]} ${simplePattern[3]}:${simplePattern[4]}:${simplePattern[5]}`;
-      return { timestamp, phoneNumber, callType };
-    }
-
-    // Extract TP tokens from filename
-    const tp1Match = filename.match(/TP1(\d+)/);
-    const tp3Match = filename.match(/TP3([+\d]+)/);
-    const tp4Match = filename.match(/TP4(\w+)/);
-
-    // Parse timestamp (TP1) - assuming it's a Unix timestamp in milliseconds
-    if (tp1Match) {
-      const ts = parseInt(tp1Match[1]);
-      if (!isNaN(ts)) {
-        // Convert Unix timestamp to readable format
-        const date = new Date(ts);
-        timestamp = date.toISOString().slice(0, 19).replace('T', ' ');
-      }
-    }
-
-    // Parse phone number (TP3) - handle numbers with + prefix
-    if (tp3Match) {
-      const phoneStr = tp3Match[1];
-      // Remove + prefix if present and extract the actual number
-      phoneNumber = phoneStr.startsWith('+') ? phoneStr.substring(1) : phoneStr;
-    }
-
-    // Parse call type (TP4) - extract only the word after TP4 until next TP
-    if (tp4Match) {
-      const afterTP4 = filename.substring(filename.indexOf('TP4') + 3);
-      const nextTPMatch = afterTP4.match(/TP\d/);
-      if (nextTPMatch) {
-        callType = afterTP4.substring(0, nextTPMatch.index).trim();
-      } else {
-        callType = afterTP4.trim();
-      }
-    }
-  } catch (error) {
-    console.warn(`⚠️  Could not parse metadata from filename: ${filename}`);
-  }
-
-  return { timestamp, phoneNumber, callType };
-}
 
 async function generateCsvFile(folder: string, csvData: any[]): Promise<void> {
   const csvPath = path.join(folder, 'summary.csv');
