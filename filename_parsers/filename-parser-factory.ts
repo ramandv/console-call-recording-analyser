@@ -1,6 +1,7 @@
 import { FilenameParser, FilenameMetadata } from './base-filename-parser';
 import { ArexFilenameParser } from './arex-filename-parser';
 import { SimpleFilenameParser } from './simple-filename-parser';
+import { CallRecordingFilenameParser } from './call-recording-filename-parser';
 
 export class FilenameParserFactory {
   private parsers: FilenameParser[] = [];
@@ -9,6 +10,7 @@ export class FilenameParserFactory {
     // Register available parsers
     this.parsers.push(new ArexFilenameParser());
     this.parsers.push(new SimpleFilenameParser());
+    this.parsers.push(new CallRecordingFilenameParser());
   }
 
   /**
