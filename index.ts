@@ -33,6 +33,7 @@ interface TranscribeOptions {
   analysisService?: string;
   analysisMaxMb?: number | string;
   analysisMinSeconds?: number | string;
+  parser?: string;
 }
 
 const program = new Command();
@@ -52,6 +53,7 @@ program
   .option('-A, --analysis-service <service>', 'Analysis service to use: gemini', 'gemini')
   .option('-M, --analysis-max-mb <mb>', 'Maximum file size (MB) for analysis', '2')
   .option('-N, --analysis-min-seconds <seconds>', 'Minimum duration (seconds) for analysis', '60')
+  .option('-P, --parser <parser>', 'Filename parser to use: arex, simple, call-recording (auto if not specified)')
   .action(async (folder: string, options: TranscribeOptions) => {
     try {
       await main(folder, options);
@@ -81,6 +83,18 @@ async function main(folder: string, options: TranscribeOptions): Promise<void> {
 
   console.log(`🚀 Starting ${mode} process...`);
   console.log(`📁 Target folder: ${folder}`);
+
+  // Check and set filename parser override
+  if (options.parser) {
+    const parsers = filenameParserFactory.getParsers();
+    const p = parsers.find(parser => parser.name === options.parser);
+    if (!p) {
+      console.error(`Error: Parser "${options.parser}" not found. Available parsers: ${parsers.map(parser => parser.name).join(', ')}`);
+      process.exit(1);
+    }
+    filenameParserFactory.setOverrideParser(p);
+    console.log(`📋 Filename parser override set to: ${p.name}`);
+  }
 
   if (mode === 'transcribe' || mode === 'both') {
     console.log(`🔊 Transcription service: ${service}`);

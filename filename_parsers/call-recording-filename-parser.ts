@@ -4,8 +4,8 @@ export class CallRecordingFilenameParser implements FilenameParser {
   name = 'call-recording';
 
   canParse(filename: string): boolean {
-    // Check if starts with "Call recording " and ends with .m4a
-    return filename.startsWith('Call recording ') && filename.endsWith('.m4a');
+    // Check if starts with "Call recording "
+    return filename.startsWith('Call recording ');
   }
 
   parse(filename: string): FilenameMetadata {
