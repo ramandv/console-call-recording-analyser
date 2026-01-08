@@ -121,7 +121,7 @@ export class GeminiAnalysisProvider implements AnalysisProvider {
       // Try to create a basic error analysis file
       try {
         const errorData = { error: error instanceof Error ? error.message : 'Unknown error' };
-        const jsonPath = path.join(path.dirname(transcriptionPath), path.basename(transcriptionPath, path.extname(transcriptionPath)) + '_analysis.json');
+        const jsonPath = path.join(path.dirname(transcriptionPath), path.basename(transcriptionPath, path.extname(transcriptionPath)) + '_error.json');
         await fs.writeFile(jsonPath, JSON.stringify(errorData, null, 2), 'utf8');
         console.log(`💾 Saved error analysis to: ${jsonPath}`);
       } catch (writeError) {
