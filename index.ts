@@ -31,6 +31,7 @@ interface TranscribeOptions {
   overviewOnly?: boolean;
   service?: string;
   analysisService?: string;
+  analysisMinKb?: number | string;
   analysisMaxMb?: number | string;
   analysisMinSeconds?: number | string;
   parser?: string;
@@ -51,6 +52,7 @@ program
   .option('-o, --overview-only', 'Only generate overview stats from existing summary.csv files')
   .option('-S, --service <service>', 'Transcription service to use: whisper, google, speechmatics, or gemini', 'whisper')
   .option('-A, --analysis-service <service>', 'Analysis service to use: gemini', 'gemini')
+  .option('-K, --analysis-min-kb <kb>', 'Minimum file size (KB) for analysis', '1')
   .option('-M, --analysis-max-mb <mb>', 'Maximum file size (MB) for analysis', '2')
   .option('-N, --analysis-min-seconds <seconds>', 'Minimum duration (seconds) for analysis', '60')
   .option('-P, --parser <parser>', 'Filename parser to use: arex, simple, call-recording (auto if not specified)')
@@ -121,6 +123,9 @@ async function main(folder: string, options: TranscribeOptions): Promise<void> {
     console.log(`🔍 Analysis service: ${analysisService}`);
     if (analysisService === 'gemini') {
       console.log('💎 Gemini analysis service selected');
+      const cfgMinKb = parseFloat(String(options.analysisMinKb ?? process.env.ANALYSIS_MIN_KB ?? '1'));
+      const effectiveMinKb = isNaN(cfgMinKb) || cfgMinKb < 0 ? 1 : cfgMinKb;
+      console.log(`📐 Min analysis file size: ${effectiveMinKb} KB`);
       const cfgMb = parseFloat(String(options.analysisMaxMb ?? process.env.ANALYSIS_MAX_MB ?? '2'));
       const effectiveMb = isNaN(cfgMb) || cfgMb <= 0 ? 2 : cfgMb;
       console.log(`📏 Max analysis file size: ${effectiveMb} MB`);
@@ -919,12 +924,20 @@ async function processFolderForAnalysis(folder: string, provider: AnalysisProvid
         console.log(`🔍 ANALYZING FILE: ${item.name}`);
         console.log(`${'-'.repeat(60)}`);
 
-        // Enforce max file size for analysis (default 2 MB, configurable)
+        // Enforce file size window for analysis (default min 1 KB, max 2 MB, configurable)
         try {
+          const cfgMinKb = parseFloat(String(options.analysisMinKb ?? process.env.ANALYSIS_MIN_KB ?? '1'));
+          const effectiveMinKb = isNaN(cfgMinKb) || cfgMinKb < 0 ? 1 : cfgMinKb;
+          const minBytes = Math.floor(effectiveMinKb * 1024);
           const cfgMb = parseFloat(String(options.analysisMaxMb ?? process.env.ANALYSIS_MAX_MB ?? '2'));
           const effectiveMb = isNaN(cfgMb) || cfgMb <= 0 ? 2 : cfgMb;
           const maxBytes = Math.floor(effectiveMb * 1024 * 1024);
           const stat = await fs.stat(fullPath);
+          if (stat.size < minBytes) {
+            console.log(`⏭️  SKIPPING: File size ${(stat.size / 1024).toFixed(2)} KB is below analysis minimum of ${effectiveMinKb} KB`);
+            skippedCount++;
+            continue;
+          }
           if (stat.size > maxBytes) {
             console.log(`⏭️  SKIPPING: File size ${(stat.size / (1024 * 1024)).toFixed(2)} MB exceeds analysis limit of ${effectiveMb} MB`);
             skippedCount++;

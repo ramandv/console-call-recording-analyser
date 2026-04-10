@@ -44,7 +44,7 @@ node dist/index.js
 npm start /path/to/folder
 
 # Combine with analysis config
-npm start /path/to/folder -- --analysis-max-mb 2 --analysis-min-seconds 60
+npm start /path/to/folder -- --analysis-min-kb 1 --analysis-max-mb 2 --analysis-min-seconds 60
 ```
 
 ### Choose Transcription Service
@@ -403,6 +403,19 @@ package.json                  # Project dependencies and scripts
 - **commander** - Command-line interface parsing
 - **Node.js fs promises** - Asynchronous file operations
 ##### File Size Limit
+- Default minimum file size for analysis: 1 KB
+- Change via CLI: `--analysis-min-kb <number>`
+- Or set env var: `ANALYSIS_MIN_KB=<number>`
+
+Examples:
+```bash
+# Skip files smaller than 1 KB
+npm start -- --analyse-only --analysis-min-kb 1 input
+
+# Using env var (overrides default)
+ANALYSIS_MIN_KB=5 npm start -- --analyse-only input
+```
+
 - Default max file size for analysis: 2 MB
 - Change via CLI: `--analysis-max-mb <number>`
 - Or set env var: `ANALYSIS_MAX_MB=<number>`
